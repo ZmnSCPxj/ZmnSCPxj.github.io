@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang=en>
+<head>
+<meta charset=utf-8>
+<title>Driveproof: Sidechain Headers On Mainchain</title>
+</head>
+<body>
+
+<div class=header>
+<p><a href='../../index.html'>ZmnSCPxj</a> &raquo; <a href='../index.html'>Sidechain</a> &raquo; Driveproof: Sidechain Headers On Mainchain (SHM)</p>
+</div>
+
+<div class=content>
+<h1>Introduction</h1>
+<p>Prior to this work, there were two primary proposed
+implementations of sidechains.</p>
+<ol>
+ <li><dfn>SPV proof-based sidechains</dfn>, as described in the
+     original <a href='https://blockstream.com/sidechains.pdf'>sidechains
+     paper</a>.  Sidechains have their own proof-of-work, and
+     sections of the sidechain header chain are published on
+     the mainchain in a "compact SPV proof" which attests that
+     a side-to-main withdrawal exists on the sidechain.</li>
+ <li><dfn>Drivechains</dfn>, as described in the
+     <a href='http://www.drivechain.info/'>drivechains website</a>.
+     Sidechains are merge-mined, and the existence of side-to-main
+     withdrawals on the sidechain are attested to by miner voting on
+     the mainchain.  Sztorc's proposal also includes "blind" merge
+     mining, where the sidechain block assembler is separate from
+     the mainchain miner, and pays the latter to commit to "correct"
+     block header hashes.</li></ol>
+<p><dfn>Driveproof</dfn> combines elements of both proposals.
+Specifically:</p>
+<ol>
+ <li>Sidechains are <strong>merge-mined</strong>.</li>
+ <li>The merge-mining does not commit to header hashes as in
+     traditional merge-mining; instead, sidechain headers are
+     reduced to the minimum, and <strong>the entire sidechain
+     header is published on the mainchain</strong>.</li>
+ <li>As the chain of headers is published on the mainchain
+     continuously as part of merge-mining, an <strong>SPV
+     proof is being continuously published</strong>; there is
+     no need to compact an SPV proof at withdrawal, since the
+     mainchain already has the SPV proof as part of
+     merge-mining the sidechain.</li>
+ <li>Sidechains may be "blind" merge-mined, i.e. arbitrary owners
+     of maincoin may pay miners to insert particular block
+     headers onto the sidechain; this means <strong>the
+     economic majority controls the sidechain</strong>, in a
+     way that is not done in drivechains, since the miner voting
+     of drivechains is eliminated in favor of economic-majority
+     voting for the true history of the sidechain.</li></ol>
+
+<h1>Sidechain Headers</h1>
+<p>At its core, a blockchain is simply a Merklized singly-linked
+list, with the genesis block as the end-of-list indicator.</p>
+<p>At an absolute minimum, a blockchain header needs to contain
+only two things: a commitment to the transactions in the block,
+and a commitment to the previous blockchain header.</p>
+<p>We may argue, perhaps, that new innovations may require that
+sidechains have additional fields in their headers, and that a
+one-size-fits-all is too much of a restriction on sidechains.</p>
+<p>I would then point out the fields below:</p>
+<ol>
+ <li>extraNonce</li>
+ <li>SegWit witness commitment</li></ol>
+<p>In Bitcoin, because the header format must be fixed forever
+unless hardforked, both of the above fields are not in the
+block header.  Instead, they are in the coinbase transaction.
+The same technique can be used by sidechains: header fields
+may be placed in a sidechain's equivalent of a coinbase
+transaction.</p>
+<p>Indeed, sidechain Merkle trees need not be balanced.  Sidechains
+may have a special "transaction" which is not really a transaction,
+which contains the data the header would have contained.  This could be
+the sole child of one side of the root Merkle tree node, with the
+other child being the root of the balanced Merkle tree of
+transactions.</p>
+<p>Thus, in driveproof, a sidechain block header is composed of:</p>
+<ol>
+ <li><code>sidechainId</code>, 16 bytes that identify a sidechain.</li>
+ <li><code>hashMerkleRoot</code>, 32 bytes that commit to the
+     sideblock's transactions.</li>
+ <li><code>hashPrevBlock</code>, 32 bytes that are the hash of the
+     previous sidechain block header.</li></ol>
+
+<h1>Sidechain Miners and Mainchain Miners</h1>
+<p>In driveproof, sidechain miners "hire" mainchain miners to
+insert entire sidechain headers on the mainchain.
+This is why this technique is called "sidechain headers on
+mainchain."</p>
+
+<h1>In-progress</h1>
+<p>This writeup is in progress.  See the links below for the
+discussion on bitcoin-dev:</p>
+<ol>
+</ol>
+
+</div>
+
+<div class=footer>
+<p>&copy; 2017 ZmnSCPxj.  Released under CC-BY.</p>
+</div>
+
+</body>
+</html>
