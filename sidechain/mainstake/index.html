@@ -47,24 +47,27 @@ coins are used to indicate a controlling interest.</p>
  <li>A maincoin owner dedicates an amount of maincoin as stake
      to a particular sidechain (note that this is
      <em>separate</em> from the maincoin that is backing the
-     sidecoin).</li>
+     sidecoin).  This stake has a lock time: it cannot be
+     spent "normally" until the lock time has passed.</li>
  <li>At each new mainchain block, we run a stake lottery
      (as is usual for proof-of-stake).  The seed of the RNG
      used for that lottery is the mainchain block header
      hash of the previous block.  The tickets in the lottery
      are those UTXO's that were staked to the sidechain as
-     of the latest block.</li>
+     of the latest block; the weight of the ticket is based
+     on the value staked, and the remaining lock time.</li>
  <li>The winning sidechain staker assembles a candidate
      sidechain block (with fees paid to himself or herself),
      signs it, and bribes miners to include
-     the sidechain block header on the mainchain.</li>
+     the sidechain block header on the next mainchain block.</li>
  <li>Miners may only include one sidechain block header from
-     the winning sidechain staker.</li>
+     the winning sidechain staker of the previous mainchain
+     block.</li>
  <li>Mainchain fullnodes validate mainchain blocks by ensuring
      that an included sidechain block header is signed by the
      stake lottery winner (which it determines from the previous
      block hash in the mainchain header, and the UTXO set as of
-     the previous block hash) and that a sidechain
+     the previous mainchain block) and that a sidechain
      block header (if it exists) commits to some previous
      sidechain block header hash (as in sidechain headers on
      mainchain).</li>
@@ -77,7 +80,9 @@ coins are used to indicate a controlling interest.</p>
 </ul>
 <p>This must be strongly emphasized: <strong><em>The mainchain
 coins in a mainstake are a separate set of coins from the
-coins locked into the sidechain.</em></strong></p>
+coins locked into the sidechain.</em></strong>  Coins locked to
+the sidechain are in the sidechain, but coins mainstaked to
+protect the sidechain remain in the mainchain.</p>
 
 <h1>Nothing-at-stake and Stake-grinding</h1>
 <p>Proof-of-stake is unsafe as a consensus algorithm due to
@@ -92,18 +97,18 @@ the nothing-at-stake and stake-grinding problems.</p>
      version of the previously-won block and regaining their
      coins.</li>
  <li><dfn>Stake-grinding</dfn> is the problem where the stake
-     winner generates several candidate blocks.  The stake
-     winner does not publish blocks until it gets a block that
-     would cause the stake lottery to go to the stake winner
-     again.</li>
+     winner generates several candidate blocks it can sign.
+     The stake winner does not publish blocks until it gets a
+     block that would cause the stake lottery to go to the
+     stake winner again.</li>
 </ul>
 <p>Combining nothing-at-stake and stake-grinding lets a stake
 owner who wins once create a true chain and a cheating chain.
 The stake owner publishes the true chain and spends money for
-real services on that chain.  In the meantime, it continuously
+off-chain value on the true chain.  In the meantime, it continuously
 grinds stake on an alternate, cheating chain, keeping itself
 the winner of the lottery on the cheating chain.
-When it receives the real services, it publishes the cheating
+When it receives the off-chain value, it publishes the cheating
 chain if it is longer, reversing the spend of its money.</p>
 <p>Here is how proof-of-mainstake avoids these classic
 problems:</p>
@@ -149,8 +154,9 @@ fields:</p>
 </ol>
 <p>For each sidechain ID, for each mainchain block, at most
 one sidechain block header may be published.  In addition, the
-sidechain block header may be published only by the stake
-lottery winner.</p>
+sidechain block header published on the mainchain blocks may
+only be published by the stake lottery winner from the end of
+the previous block.</p>
 <p>Sidechain block headers are generally expected to continue
 the sidechain's topmost tip, but they may, at the stake winner's
 discretion, continue an earlier sidechain block header.  This
@@ -168,9 +174,9 @@ security.</p>
 <p>Side-to-main withdrawals are done by publishing a withdrawal
 transaction on the sidechain, and having some sidechain block
 header commit to the withdrawal transaction.  On the mainchain
-itself, spends of the sidechain's lockbox require that a
-withdrawal transaction:</p>
-<ol>
+itself, spends of the sidechain's lockbox require that the
+sidechain-side withdrawal transaction:</p>
+<ul>
  <li>is on the longest chain of the sidechain</li>
  <li>is at least N sidechain blocks deep</li>
  <li>is on all other chains of the sidechain that are at most
@@ -178,11 +184,11 @@ withdrawal transaction:</p>
      exist on every competing chain of the sidechain that is
      0 to N sidechain blocks behind the longest chain in
      height).</li>
-</ol>
+</ul>
 <p>Since the sidechain header is published on mainchain, a
 mainchain fullnode can determine the length of each of the
 sidechain's split chains, and uses the length as a proxy for
-validity, on the assumption that rational sidechain stakers
+validity, on the assumption that rational sidechain mainstakers
 would rather cooperatively build the sidechain rather than
 steal the sidechain's backing maincoin.</p>
 <p>Obviously the format of the sidechain withdrawal transaction
@@ -219,14 +225,17 @@ add a new opcode, <code>OP_STAKEVERIFY</code>, from an existing
 below in the <code>IsStandard</code> check:</p>
 <pre>
  OP_DUP OP_HASH160 &lt;<em>pubkeyhash</em>&gt; OP_EQUALVERIFY OP_CHECKSIGVERIFY
- &lt;<em>sidechainId</em>&gt; OP_STAKEVERIFY
+ &lt;<em>sidechainId</em>&gt; &lt;<em>stakeLockTime</em>&gt; OP_STAKEVERIFY
 </pre>
 <p>Where <em>sidechainId</em> is a non-zero identifier for a
 sidechain, and <em>pubkeyhash</em> is the hash of a public key
 that the staker controls.</p>
 <p>The stake may be spent in one of two ways.  Given the
-<code>scriptSig</code> below, the stake is simply spent, i.e.
-it is removed from being staked to the given sidechain.</p>
+<code>scriptSig</code> below, the stake is spent, i.e.
+it is removed from being staked to the given sidechain.
+This <code>scriptSig</code> below is only valid if the
+<code>nLockTime</code> of the transaction equals th
+<code>stakeLockTime</code>.</p>
 <pre>
  0 &lt;<em>signature</em>&gt; &lt;<em>pubkey</em>&gt;
 </pre>
@@ -240,21 +249,42 @@ UTXO has additional restrictions:</p>
 <ol>
  <li>It is valid only if the UTXO is the stake winner from
      the previous block header hash.</li>
+ <li>It must have exactly one input (the <code>scriptSig</code>
+     <code>1 &lt;<em>signature</em>&gt; &lt;<em>pubkey</em>&gt;</code>)
+     and exactly one or two outputs.</li>
  <li>The transaction's 0-indexed output must be an <code>OP_RETURN</code>
      output that contains a sidechain block header.  The sidechain
      block header's <code>hashPrevBlock</code> must be either
      0, or the hash of a sidechain block header of that sidechain
      that was already published before.</li>
+ <li>The transaction's 1-indexed output, if it exists, must
+     be another <code>OP_STAKEVERIFY</code> with the same
+     <code>sidechainId</code> and <code>stakeLockTime</code>.</li>
 </ol>
 <p>Since publication of a sidechain block header requires a spend
 of the stake, this ensures that a mainstaker can only publish a
 single sidechain block header if it wins the stake lottery.</p>
 <p>The transaction needs to pay to mainchain miners in order to
 be mined; thus mainchain miners are bribed to include the sidechain
-block header by being offered fees in the transaction.</p>
-<p>If the staker wants to continue staking on the same sidechain,
-it can decide to put the remaining funds into a new stake UTXO on
-the same transaction.</p>
+block header by being offered fees in the transaction.
+As the only input is the stake itself, the mainchain fees come
+from the stake.</p>
+<h2>Lottery Weight</h2>
+<p>The weight of a mainstaked UTXO in the total stake of a
+particular sidechain ID is the product of the UTXO value in
+satoshis, and the remaining time, in mainchan blocks, before
+the mainstake's locktime.</p>
+<p>Basically, the larger the stake value, the more likely to
+be selected.  Also, the longer the stake is committed to the
+sidechain, the more likely to be selected.</p>
+<p>This system means that mainstaker's weight in the
+lottery (its likelihood of winning the stake lottery)
+decreases linearly over time, falling to zero at and
+after the locktime.  This reflects the reality that
+the longer the stake is locked, the greater the incentive
+for a mainstaker to protect the value of the maincoin by
+supporting the sidechain and not stealing from the
+sidechain.</p>
 
 <h1>Security</h1>
 <p>Sidechain security is based on the assumption that no single
@@ -285,7 +315,7 @@ the sidechain.  However, for the sidechain, the consequences of a
 successful 51% attack is greater: the loss of the entire maincoin
 backing the sidecoin.</p>
 <p>The difference is that we expect a successful 51% attack to be
-much more difficult for sidechain mainstakers to pull off.  We
+much more difficult for a sidechain mainstaker to pull off.  We
 point out that while today a very small fraction of Bitcoin users
 currently operate mining hardware, by definition a Bitcoin user
 must at some point "own" some bitcoins.
@@ -330,14 +360,30 @@ hashpower, while still able to stifle extension of the valid chain.
 This will slow down the miner's attack, hopefully enough that
 other miners can rescue the ecosystem, or a proof-of-work change
 can be deployed.</p>
-<p>In case of multiple sidechains, the miner must either split up its
-maincoin across the sidechains and attack each sidechain
-simultaneously, but suffer a low probability of being able to publish
-an invalid block for each and slowing down the attack, or focus its
-attention on one sidechain at a time.
-This is a minor improvement over drivechain, where a
-&gt;50% coalition can costlessly steal all sidechains
-simultaneously.</p>
+<p>Examining this further, we note that an attacking &gt;50% miner,
+who has blocked all legitimate sidechain activity and the creation
+of legitimate mainstakes,
+can choose a strategy along this spectrum:</p>
+<ul>
+ <li>It can wait out the mainstake locktimes of legitimate
+     mainstackers, and steal all sidecoins with a 1-satoshi
+     stake locked for a short time (enough to create a long
+     enough SPV proof).</li>
+ <li>It can lock a large number of its own funds in order to
+     get mainstaking control over the sidechain, and slowly
+     create the necessary SPV proof.</li>
+</ul>
+<p>In the first case, the attacking &gt;50% miner will be
+broadcasting its future intent to steal sidechain funds.
+Hopefully the existing locktimes will be long enough that
+the maincoin will have been crashed or other mitigations,
+such as PoW change, will have been deployed.  In the
+second case, the attacking &gt;50% miner will need to lock
+up a sizable amount of funds for a sizable length of time;
+when the theft is committed, it is possible that the fund
+locktime is still in the future, by which time the price
+of the coin may have crashed, or other mitigations, such as
+a softfork to blacklist the fund, may have been deployed.</p>
 <h2>Centralization Risk</h2>
 <p>Drivechain has significant incentive for a sidechain protector
 and a mainchain miner to coalesce, increasing centralization risk.</p>
@@ -356,10 +402,12 @@ each withdrawal, and only downvote if an invalid withdrawal
 "slips through", this behavior can be attacked by spamming invalid
 withdrawals continuously.  The only mitigation offered is for
 miners to "temporarily" upgrade to sidechain fullnodes; but one
-wonders if there is sufficient incentive to downgrade.
+wonders if there is sufficient incentive to <em>downgrade</em>.
 This essentially seems to admit of only one true solution: merge
-sidechain protectors and mainchain miners, then forcibly softfork in
-the sidechain into an extension block.</p>
+sidechain protectors and mainchain miners (in which case "blind"
+merge mining is pointless), then softfork
+the sidechain into an extension block (in which case sidechains
+are pointless).</p>
 <p>Mainstaking, on the other hand, limits miner control over
 sidechains.  A sidechain mainstaker wants to be able to publish
 its transaction to all miners immediately before the next block
@@ -375,13 +423,13 @@ requiring special relationships with mainchain miners, unlike
 drivechain, which requires that a sidechain protector have special
 trusted channels to transmit voting information to mainchain miners.</p>
 
-<h1>Stake Timeout</h1>
-<p>For various reasons, it may be best to consider having staked
-UTXOs time out.  That is, the stake lottery will only include
-mainstake UTXOs up to, say, 12096 mainchain blocks ago.  Mainstakers
-must renew their UTXOs by doing a "normal" spend using <code>0
-&lt;signature&gt; &lt;pubkey&gt;</code> and spending it again on a
-new stake <code>scriptPubKey</code>.</p>
+<h1>Stake Locktime limit</h1>
+<p>For various reasons, it may be best to consider disallowing
+stake locktimes too far into the future.  For example, the stake
+locktime may not be further than about a year from the time it
+is first staked.  Mainstakers must renew their stakes by doing a
+"normal" spend using <code>0 &lt;signature&gt; &lt;pubkey&gt;</code>
+and spending it again on a new stake <code>scriptPubKey</code>.</p>
 <ul>
  <li>In case the private keys of a mainstake are lost or destroyed
      (for example, physical destruction of the hardware executing
@@ -390,15 +438,10 @@ new stake <code>scriptPubKey</code>.</p>
      that mainchain block.  However, after enough time has passed,
      the mainstake is removed from the stake lottery and will no
      longer encumber the sidechain.</li>
- <li>This policy subtly encourages mainstakers to put all of their
-     stake in a single UTXO.  When a mainstaker wins the stake
-     lottery, it spends the winning UTXO and creates a new stake
-     UTXO, which basically resets the timeout of the stake.  If
-     the mainstaker put all the stake in one UTXO, then the entire
-     stake is refreshed.  If the mainstaker put the stake in two
-     UTXO, however, then only one stake is refreshed, and the other
-     has a chance not to win until it times out.  Reducing the
-     number of UTXOs is always a win.</li>
+ <li>Relatedly, an attack where a small amount of coin is staked
+     to a very far future date (1000 years from now, for example),
+     in order to overpower more moderate stakes to steal the
+     entire sidechain funds, is limited by this policy.</li>
  <li>It allows the sidechain to be upgraded from a mainstaked
      sidechain to a miner-controlled, mainchain fullnode-verified
      extension block (see next section).</li>
@@ -412,24 +455,20 @@ new stake <code>scriptPubKey</code>.</p>
      and the miner can outright steal costlessly.  The miner can
      even just wait out the timeout period and steal all sidechain
      coins as soon as all the timeouts end.  Hopefully such dire
-     straits will allow a PoW change to be deployed in 3 months.</li>
- <li>This rewards hodlers with larger hodlings slightly more than
-     those with smaller hodlings.  A larger mainstake UTXO is more
-     likely to win the stake lottery, which gets the renewal "for free",
-     while a smaller mainstake UTXO will have to pay miners to renew
-     the UTXO.</li>
+     straits will allow a PoW change to be deployed before the
+     timeouts of all sidechain mainstakes end.</li>
 </ul>
 
 <h1>Upgrading Mainstaked Sidechains to Miner-Controlled Extension
 Blocks</h1>
 <p>The end goal for any sidechain is to be merged into mainchain as
 an extension block.</p>
-<p>If mainstakes will time out, then the below upgrade path can be
-used.</p>
+<p>As mainstakes will eventually lose their weight at the end of the
+stake locktime, the below upgrade path can be used.</p>
 <ol>
  <li>The developer selects a public-private keypair and publishes both
-     private and public keys.  This will be the miner-controlled
-     keypair.</li>
+     private and public keys in the code.  This will be the
+     miner-controlled keypair.</li>
  <li>At ACTIVATE, mainchain fullnodes will now verify the sidechain
      blocks and reject invalid sidechain blocks.</li>
  <li>After ACTIVATE, the developer creates a single UTXO with 1
@@ -438,7 +477,7 @@ used.</p>
      This is the current miner-controlled stake.  Spends of this
      stake is only allowed if it is publishing a sidechain block
      header, or if it will spend itself entirely on a new
-     miner-controlled stake.</li>
+     miner-controlled stake (i.e. when it times out).</li>
  <li>After ACTIVATE, new mainstaking UTXOs are disallowed, other
      than the miner-controlled stake.</li>
  <li>When all other mainstake UTXOs have timed out or have been
