@@ -19,7 +19,8 @@ supposed to ensure that miners do not have to run sidechain nodes,
 but the guessing game of sidechain withdrawal validity undermines
 its security, and miners are obligated to run sidechain nodes anyway,
 increasing the barrier-to-entry of new miners.  See this
-<a href=' https://www.reddit.com/r/Bitcoin/comments/6ztp3b/lets_discuss_something_techrelated_for_a_change/dmy7jgu/'>Reddit thread</a>.</p>
+<a href='https://lists.linuxfoundation.org/pipermail/bitcoin-dev/2017-May/014443.html'>bitcoin-dev message</a>:
+miners have incentive to run sidechain nodes.</p>
 <p>Another proposal (mine, <a href='../driveproof/index.html'>Driveproof, or
 Sidechain Headers On Mainchain (SHOM)</a>), unifies voting with
 merge mining, and then lets miners be paid for both validity of
@@ -174,8 +175,11 @@ security.</p>
 <p>Side-to-main withdrawals are done by publishing a withdrawal
 transaction on the sidechain, and having some sidechain block
 header commit to the withdrawal transaction.  On the mainchain
-itself, spends of the sidechain's lockbox require that the
-sidechain-side withdrawal transaction:</p>
+itself, spends will be done via a variant of
+<code>OP_WITHDRAWPROOFVERIFY</code>.  Spends of the sidechain's
+lockbox require proof-of-existence that the sidechain-side
+withdrawal transaction exists, and also that the sidechain-side
+withdrawal transaction:</p>
 <ul>
  <li>is on the longest chain of the sidechain</li>
  <li>is at least N sidechain blocks deep</li>
@@ -200,6 +204,7 @@ transaction Merkle tree of the sidechain, and putting the
 actual sidechain transaction Merkle tree in the other branch of
 that node.</p>
 <p>Lockboxes of a sidechain may be created and spent, but
+<!-- Details needed here, re-explain and re-clarify based on the driveproofs work -->
 may normally only be spent to other lockboxes of the same
 sidechain.  To pay from a sidechain lockbox to some mainchain
 P2SH addess, then a proof that a side-to-main withdrawal exists
@@ -225,7 +230,7 @@ add a new opcode, <code>OP_STAKEVERIFY</code>, from an existing
 below in the <code>IsStandard</code> check:</p>
 <pre>
  OP_DUP OP_HASH160 &lt;<em>pubkeyhash</em>&gt; OP_EQUALVERIFY OP_CHECKSIGVERIFY
- &lt;<em>sidechainId</em>&gt; &lt;<em>stakeLockTime</em>&gt; OP_STAKEVERIFY
+ &lt;<em>stakeLockTime</em>&gt; &lt;<em>sidechainId</em>&gt; OP_STAKEVERIFY
 </pre>
 <p>Where <em>sidechainId</em> is a non-zero identifier for a
 sidechain, and <em>pubkeyhash</em> is the hash of a public key
@@ -258,7 +263,7 @@ UTXO has additional restrictions:</p>
      0, or the hash of a sidechain block header of that sidechain
      that was already published before.</li>
  <li>The transaction's 1-indexed output, if it exists, must
-     be another <code>OP_STAKEVERIFY</code> with the same
+     be another <code>OP_STAKEVERIFY</code> with exactly the same
      <code>sidechainId</code> and <code>stakeLockTime</code>.</li>
 </ol>
 <p>Since publication of a sidechain block header requires a spend
@@ -285,6 +290,44 @@ the longer the stake is locked, the greater the incentive
 for a mainstaker to protect the value of the maincoin by
 supporting the sidechain and not stealing from the
 sidechain.</p>
+<h2>Operating the Lottery</h2>
+<p>In effect, the sidechain advances "between" mainchain
+blocks.</p>
+<p>Every sidechain fullnode must be a mainchain fullnode.
+Sidechain mainstakers must also run a sidechain fullnode and
+also a mainchain fullnode.</p>
+<p>After processing a mainchain block, we have the block
+header hash of the tip, and the UTXO set as of the end of that
+mainchain block.</p>
+<p>From the UTXO set, we extract the UTXOs that happen to be
+mainstakes.  These are the tickets in the lottery.  The weight
+of the ticket is based on the value of the UTXO, times the
+remaining time until the stake is unlocked (as described in
+the previous sub-section).</p>
+<p>The lottery is then seeded using the block header hash of
+the tip.  If you are the stake winner, you quickly create a
+sidechain block (paying its fees to yourself) and its header,
+then sign the sidechain block header and publish it as
+quickly as possible to all miners, before another mainchain
+miner gets the next mainchain block.</p>
+<p>When the next mainchain block arrives, if it contains your
+sidechain block header, congratulations, you have advanced
+the sidechain state and can now publish your sidechain block
+to other sidechain fullnodes.  If it does not contain your
+sidechain block header, this is sad as you have now "lost
+your winning ticket" by not responding fast enough.</p>
+<p>(If you deliberately do not do anything, then the next
+mainchain block will not have a sidechain block header,
+but it is likely to now select a different stake winner
+unless you control the entire stake of the sidechain.)</p>
+<p>Regardless of whether you were able to publish a
+sidechain block header or not on the mainchain, when the
+next mainchain block arrives, again the UTXO set is
+extracted to get the mainstake tickets, then the lottery
+is run based on the block header hash of the new tip.
+Thus, all mainchain fullnodes have enough information to
+verify the correct operation of the sidechain mainstake
+lottery.</p>
 
 <h1>Security</h1>
 <p>Sidechain security is based on the assumption that no single
@@ -461,16 +504,40 @@ and spending it again on a new stake <code>scriptPubKey</code>.</p>
 
 <h1>Upgrading Mainstaked Sidechains to Miner-Controlled Extension
 Blocks</h1>
-<p>The end goal for any sidechain is to be merged into mainchain as
-an extension block.</p>
+<p>One of the reasons for implementing a sidechain is to prototype
+improvements to Bitcoin before being implemented on the mainchain.
+(One may consider as an example, the
+<a href='https://elementsproject.org'>Elements Alpha</a> sidechain,
+where <a href='https://elementsproject.org/elements/relative-lock-time/'><code>OP_CHECKSEQUENCEVERIFY</code></a>
+and <a href='https://elementsproject.org/elements/segregated-witness/'>SegWit</a>
+were prototyped)</p>
+<p>If a sidechain transaction and block format is "near enough" to
+the mainchain, then it may be possible to simply softfork the
+sidechain rules onto mainchain if there is significant evidence
+that the prototype on the sidechain is beneficial.
+Then the sidechain users can simply move their sidecoins back to
+maincoin, and mainstakers let their stakes lapse and transfer them
+elswhere, and the sidechain itself can simply be defunct, as its
+rules are now in the mainchain (or the sidechain can explore even
+further with even newer features to prototype).
+However, there may be sidechains &mdash;
+<a href='https://scalingbitcoin.org/papers/mimblewimble.txt'>MimbleWimble</a>,
+for instance &mdash; whose transaction format or block format is
+very different, or which have significant changes in transaction
+validation, and which cannot be usefully applied to the mainchain,
+or would require a hardfork.  For such sidechains to be "upgraded"
+to mainchain status, they need to be extension blocks.</p>
 <p>As mainstakes will eventually lose their weight at the end of the
-stake locktime, the below upgrade path can be used.</p>
+stake locktime, the below upgrade path from mainstaked sidechain to
+extension block can be used.  Note that below is a softfork.</p>
 <ol>
  <li>The developer selects a public-private keypair and publishes both
      private and public keys in the code.  This will be the
      miner-controlled keypair.</li>
  <li>At ACTIVATE, mainchain fullnodes will now verify the sidechain
-     blocks and reject invalid sidechain blocks.</li>
+     blocks and reject invalid sidechain blocks &mdash; the sidechain
+     is now an extension block.  Legacy nodes will be unaware of the
+     sidechain blocks.</li>
  <li>After ACTIVATE, the developer creates a single UTXO with 1
      satoshi, staked to the sidechain (now an extension block) with
      the published public key.
@@ -480,10 +547,31 @@ stake locktime, the below upgrade path can be used.</p>
      miner-controlled stake (i.e. when it times out).</li>
  <li>After ACTIVATE, new mainstaking UTXOs are disallowed, other
      than the miner-controlled stake.</li>
- <li>When all other mainstake UTXOs have timed out or have been
-     unstaked, only the miner-controlled stake will be selected
+ <li>After ACTIVATE, existing mainstake UTXOs will still
+     participate in the lottery, for back compatibility with
+     legacy nodes.  However, when the mainstake UTXO times out,
+     it cannot be re-staked again to the same sidechain.</li>
+ <li>When all other mainstake UTXOs have timed out,
+     only the miner-controlled stake will be selected
      in the stake lottery, even at 1 satoshi.  The sidechain is
      now completely a miner-controlled extension block.</li>
+</ol>
+<h2>A Vision For Future Bitcoin Upgrades</h2>
+<p>The example of Elements Alpha suggests a new way of proposing
+upgrades to Bitcoin.</p>
+<ol>
+ <li>Design and develop the upgrade as a sidechain.</li>
+ <li>Deploy the sidechain and fight off attackers successfully.</li>
+ <li>Show the world that the improvements on the sidechain are
+     beneficial, and that people are using the sidechain
+     significantly.</li>
+ <li>Convince the other developers of Bitcoin to upgrade the
+     sidechain to mainchain status, citing the evidence gathered
+     from being a sidechain.</li>
+ <li>If it can be done as a softfork on the mainchain, then
+     re-deploy as a softfork on the mainchain.  If not, and it is
+     acceptable as an extension block, then upgrade the sidechain
+     to an extension block, as above.</li>
 </ol>
 
 </div>
