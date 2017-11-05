@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang=en>
+<head>
+<meta charset=utf-8>
+<title>Sidechain Weaknesses</title>
+</head>
+<body>
+
+<div class=header>
+<p><a href='../../index.html'>ZmnSCPxj</a> &raquo; <a href='../index.html'>Sidechain</a> &raquo; Sidechain Weaknesses</p>
+</div>
+
+<div class=content>
+<h1>Introduction</h1>
+<p>Sidechains offer a very important ability to Bitcoin:
+the ability to absorb the abilities of altchains, and hereby retain
+its dominance in the cryptocurrency space.
+With sidechains, Bitcoin can not only acquire innovations from
+alternative chains, but also bring to bear its important
+first-mover advantage and network effect.</p>
+<p>The key problem with all side-to-main pegs is that the strength of
+the peg is dependent on the "healthiness" of the sidechain.  But
+arguably, the peg <em>must</em> be strong, at <em>precisely</em> the
+point where the sidechain is unhealthy, and <em>people are leaving
+the sidechain</em>.</p>
+
+<h1>SPV Proof Sidechains</h1>
+<p>The original sidechains paper introduced the use of SPV proofs
+to prove ownership of sidecoin.
+An <dfn>SPV proof</dfn> is, at its heart, simply a sequence of
+connected header blocks (a <dfn>compact SPV proof</dfn> is a way
+of expressing an SPV proof in a shorter form, such as a
+<a href='https://eprint.iacr.org/2017/963.pdf'>Proof of Proof of
+Work</a>).
+In addition, the same mechanism
+(SPV proof) is used as a fraud proof to deny a withdrawal attempt
+(an SPV proof used in this manner is called a "<dfn>reorg
+proof</dfn>").</p>
+<p>In the original formulation, sidechains would be mined
+"traditionally", using some proof-of-work algorithm, and the
+sidechain would have its own set of miners.  The Bitcoin chain
+would simply accept an SPV proof that bitcoins were locked on
+the sidechain in order to unlock coins on the Bitcoin chain.
+The sidechain would also accept an SPV proof that bitcoins were
+locked on the Bitcoin chain in order to unlock coins on the
+sidechain.</p>
+<h2>Sidechain Miner Incentives Under SPV Proof Sidechains</h2>
+<p>On the sidechain, an amount B of bitcoins is in use, and are
+locked on the mainchain (it is <dfn>backing</dfn> the coins on
+the sidechain).  On each sidechain block, an amount F
+of bitcoins per block is paid as fees to sidechain miners.</p>
+<p>On the mainchain, an SPV proof of N sidechain block headers
+will be accepted to authorize a withdrawal.  On the mainchain,
+sidechain withdrawals are delayed by D blocks to allow reorg
+proofs to gainsay the withdrawal.  Let us assume for now that
+sidechain blocks and mainchain blocks are discovered at the
+same rate, 10 minutes per block.</p>
+<p>For a sidechain miner with &gt;50% hashpower on the sidechain,
+if B &gt; F * (N + D), the sidechain miner should steal the
+sidechain's entire backing fund.  Theft is done by creating an
+invalid sidechain block with a withdrawal of the entire B to a
+mainchain address the thief control, and creating a sequence of
+block headers long enough to cause the mainchain Bitcoin to
+accept it as an SPV proof and too long for a honest miners to
+provide a reorg proof.</p>
+<p>In (N + D) amount of time, the &gt;50% sidechain miner can
+build a longer chain than the rest of the sidechain miners.
+The sidechain miner can earn B bitcoin in
+(N + D) blocks running an invalid sidechain fork, but only earn
+F * (N + D) in the same amount of blocks running a valid sidechain
+fork.  If B &gt; F * (N + D), then the sidechain miner should
+steal.</p>
+<p>Now it can be argued that even a sidechain miner seeking
+long-term earnings would prefer to keep the sidechain alive and
+healthy, and not steal the backing bitcoin fund B.</p> 
+<p>But consider the end-of-life scenario for a sidechain.  When a
+sidechain approaches its end-of-life, then the sidechain miners
+know, for certain, that the future sidechain fees F will, from
+now on, be a fraction of the total remaining backing fund B.
+This is because sidechain users will start processing withdrawals
+from the sidechain, eventually reducing B, and only a fraction of
+the bitcoins in B will ever be paid as fees to the sidechain.</p>
+<p>We may counter that end-of-life is an unlikely scenario.
+But consider the reasons why a sidechain may reach end-of-life:</p>
+<ol>
+ <li>The sidechain has <em>succeeded</em>.  It has proven that its
+     features are desired by many users, that the new features do
+     not break Bitcoin's security, and so on.  Because of this, the
+     sidechain features are then added to mainchain.
+     But, since the mainchain now
+     contains the sidechain features while having the full security
+     of mainchain, there will be little to no future use for the
+     sidechain, and any sidechain miners can definitely predict
+     that future F will approach 0 very quickly, compared to the
+     current backing fund B.
+     It would be sadly ironic for the users of a sidechain to show
+     its success and desirability, and get rewarded by having their
+     bitcoins stolen when the sidechain features are added directly
+     to mainchain.</li>
+ <li>The sidechain attempts to implement a <em>difficult feature and
+     fails</em>.
+     Perhaps an unexpected security bug is found, or some other
+     unforeseen catastrophe.
+     It may be possible that not all sidechain users may be
+     vulnerable to the sidechain's vulnerability, so at least
+     their orderly exit from the sidechain should be supported.
+     Alternatively the developers may have overestimated the
+     overall benefit the sidechain provides.
+     Mistakes may have been made, but for some kinds of
+     speculative functionality, it may be reasonable to allow
+     the developers to change their mind and recommend the
+     cessation of their sidechain.
+     As large a pool of users of the sidechain should be able to
+     safely exit even in this situation, if it can be arranged.</li>
+ <li>The end-of-life is made into a <em>self-fulfilling
+     prophecy</em>.
+     An attack is started by a sidechain miner with just below 50%
+     hashpower.  This sidechain miner then offers bribes to other
+     sidechain miners to steal the money.
+     Theft success increases the relative expected utility of the
+     bribe versus future fees F, so rational sidechain miners may
+     consider instead joining the thief to kill the sidechain
+     rather than fight off the thief to retain future fees F.
+     This may be assisted by planting false information about a
+     vulnerability.</li>
+</ol>
+<p>It is precisely at end-of-life
+that the side-to-main peg should be most secure, but it is at
+end-of-life that an SPV proof side-to-main peg is most
+vulnerable.</p>
+
+<h1>Drivechain</h1>
+<p>The other primary alternative is drivechains, where sidechains
+are merge-mined with Bitcoin, and withdrawals are validated by
+mainchain miner voting.</p>
+<p>A proponent of drivechains, Paul Sztorc,
+<a href='https://lists.linuxfoundation.org/pipermail/bitcoin-dev/2017-September/014967.html'>claims
+that the miner voting in drivechain accomplishes the same tasks as
+SPV proofs of any kind</a>.
+If so, then drivechains should be vulnerable to the same issues that
+plague SPV Proof sidechains at end-of-life.</p>
+<h2>Merge Mining</h2>
+<p>Merge mining sidechains on the mainchain is desirable, as in
+the end it is the same token that is being protected.</p>
+<p>In particular, if the same proof-of-work function would be
+used by a separately-mined sidechain, then different disjoint
+sets of coins will have separate disjoint sets of miners
+protecting them, weakening the token security overall.
+Merge-mining means that a single set of miners protects the
+entire set of coins.</p>
+<p>The drawback of merge mining is that, to a merge miner,
+sidechains are not optional but rather mandatory.
+As sidechains have their own blocks, this effectiely
+increases the bandwidth and latency requirements on
+mainchain miners.</p>
+<p>The increase in cost of operating a mine limits membership
+to the "caste" of miners.</p>
+<h2>"Blind" Merge Mining</h2>
+<p>"Blind" merge mining attempts to reduce the cost of starting a
+new mine by allowing sidechain miners to be separate from mainchain
+miners.
+It is based on an opcode, <code>OP_BRIBEVERIFY</code>.
+It is called "blind" in the sense that the mainchain miner is
+unaware of the content of the sidechain block being mined.</p>
+<p><code>OP_BRIBEVERIFY</code> takes a single argument, the hash
+of the sidechain block concatenated with an identifier of the
+sidechain.
+As it replaces an <code>OP_NOP</code>, it leaves the same
+argument on the stack.
+The opcode then checks if the sidechain block specified was
+merge-mined on the coinbase of the mainchain block it is in.</p>
+<p>In further discussion below, I will talk to you as if you are
+a sidechain miner who does not have any mainchain hashpower
+yourself.</p>
+<p>The intended use of <code>OP_BRIBEVERIFY</code> appears to be
+in this manner:</p>
+<ol>
+ <li>Have a working relationship with a particular mainchain
+     miner.</li>
+ <li>Request a public key from the miner.</li>
+ <li>Generate a sidechain block, then pay for the block to be
+     published by sending a transaction to your mainchain
+     miner paying to: <code>&lt;sidechainBlockHash&gt;
+     OP_BRIBEVERIFY OP_DROP &lt;minerPubKey&gt; OP_CHECKSIG</code>.</li>
+ <li>The mainchain miner includes your sidechain block hash in
+     the coinbase, then publishes your transaction and an additional
+     transaction that spends it to an address the mainchain miner
+     controls.</li>
+</ol>
+<p>The above technique has the disadvantages below:</p>
+<ul>
+ <li>You need to have working relationships with all mainchain
+     miners.  If a miner who you don't have a relationship with
+     got a mainchain block, you have no chance of publishing your
+     sidechain block.</li>
+ <li>Mainchain miners get paid immediately.  This is in contrast
+     with normal mainchain fees, which require 100 blocks of
+     maturity to ensure that mainchain miners want to keep the
+     mainchain alive at least until maturation of the fees.</li>
+ <li>Another transaction is needed for the miner to claim the
+     fees.</li>
+</ul>
+<p>The technique below is an alternative:</p>
+<ol>
+ <li>Put your funds into a P2SH to: <code>OP_IF OP_BRIBEVERIFY
+     OP_DROP OP_ENDIF &lt;yourPubKey&gt; OP_CHECKSIG</code>.</li>
+ <li>Generate a sidechain block, then redeem your funds using
+     the input stack <code>&lt;yourSignature&gt;
+     &lt;sidechainBlockHash&gt; 1</code>.  Send your funds to
+     another P2SH with similar script as before.  The output
+     should be less than the input: the mainchain miner gets
+     paid by the mining fee of this transaction.</li>
+ <li>Broadcast your transaction to all miners, possibly using
+     normal Bitcoin transaction broadcast.</li>
+ <li>The mainchain miner that wants to get your fee will have
+     to publish the given sidechain block hash in the coinbase.</li>
+</ol>
+<p>This technique has the advantage that it gets broadcast to
+all miners, and the mainchain miner gets paid in the coinbase,
+which requires maturation, and does not require another
+transaction to claim the bribe.</p>
+<p>However the disadvantage is that the mempool rules are to
+your disadvantage: if your transaction is <em>not</em>
+published because somebody else bribed higher, your
+transaction remains in the mempool with the same sidechain
+block hash (which will probably be a past sidechain block
+later and will be orphaned).
+Replacing that transaction with an updated sidechain block
+hash requires a higher fee if used with RBF, which may not
+be feasible if the next sidechain block fees are lower.</p>
+<p>In addition, one reason why the first technique is
+preferred is that it gives you some control over the
+voting.
+If a miner is misvoting (voting for an invalid withdrawal,
+abstaining, or voting against a valid withdrawal) you can
+simply stop offering sidechain block hashes to that miner.</p>
+<p>Without this control, a mainchain miner can take your
+offered bribe and vote incorrectly.
+Without this control, the incentives for a
+mainchain miner to steal funds at end-of-life change: it can
+separately receive the fees F from the sidechain (via the fees
+paid for "blind" merge mining) <em>and</em> steal the backing
+funds B of the sidechain at the same time.
+But even with this control, sidechain end-of-life still
+requires trust in the miners of the sidechain, and the
+miners in drivechain will actually be the mainchain
+miners even under "blind" merge mining, since <em>you</em>
+do not have the vote.</p>
+<p>Ultimately, to my mind, if blind merge mining truly
+incentivizes a separation of sidechain and mainchain miners,
+then it would be trivial for a thief to offer the voters
+&mdash; mainchain miners &mdash;
+an out-of-band incentive to vote for an invalid withdrawal
+of the entire backing fund of the sidechain.</p>
+
+<h1>Mining and SPV</h1>
+<p>Proof-of-work mining will centralize inevitably..</p>
+<p>Currently, the major cost of mining operations is electricity
+costs.
+<a href='https://en.wikipedia.org/wiki/Electricity_pricing#Global_comparison'>Here
+is a table of electric power prices around the world</a>.
+The major takeaway from this table is that the electricity costs
+of a mine can vary by as much as a factor of 33 depending on what
+country it is built in.</p>
+<p>This fact implies that there may be economically-significant
+populations
+whose hashpower representation is disproportionately small,
+simply because of high electricity charges locally.</p>
+<p>Electricity prices vary significantly due to the difficulty
+of transporting and storing electricity.
+Storing electricity in electrolytic batteries is energy-inefficient,
+and the batteries slowly discharge over time even when unused.
+Even transporting electricity by fixed wires will dissipate some
+energy over distance.
+These factors weaken the arbitraging of electrical power.</p>
+<p>(I neglect here the fact that there are other issues involved
+in mining: Internet bandwidth and latency, as well as
+local climate &mdash; in some climates the heat emitted by
+mining devices is a desirable alternative to heaters, while in
+others the heat is an additional liability requiring even more
+electrical power to dissipate.)</p>
+<p>Indeed, even if mining devices become commodities &mdash;
+shirt ironing devices use a miner instead of heating element,
+for example &mdash; mining will still be higher in places
+where electrical prices are low.</p>
+<p>There are arguments that increases in mining in places
+with low electricity prices will increase to the point
+that the electricity prices there will rise, making it
+economically feasible to start mines elsewhere and thus
+ensuring decentralization.
+However, price is determined by supply and demand, and
+presumably locations currently with low electricity prices
+have high supply relative to current demand.
+In order for the electricity price to equalize, demand for
+electricity would have to rise in proportion to the local
+supply, implying that the concentration of miners would
+still follow available electrical supply, and would still
+fail to be distributed according to economic significance.
+In short, mining will still be centralized in locations
+with high electrical supply.</p>
+<p>Indeed, the fact that mining ASICs are developed and
+fabricated in China or nearby countries is misleading:
+even if ASICs were developed all over the world, there
+will be larger mines in places with cheaper electricity.</p>
+<h2>Why Does Bitcoin Still Work?</h2>
+<p>If Bitcoin mining is so centralized, why does Bitcoin
+still work?</p>
+<p>We should consider that mining is constrained by the
+rules imposed by fullnodes.
+Thus, in case of miner centralization, in general the
+attacks below are what remain feasible:</p>
+<ul>
+ <li>Censorship.</li>
+ <li>Double-spending.</li>
+ <li>Level-crossing attacks (i.e. war, terrorist attack,
+     government coercion, or other physical attack on
+     collocated mining hardware).</li>
+</ul>
+<p>Importantly, the first two attacks impose an economic
+cost on the attacker, and their economic benefit to the
+attacker may not outweigh the costs.</p>
+<ul>
+ <li>Censorship means turning down fee-paying
+     transactions.
+     If users respond by increasing fees on censored
+     transactions, censoring miners are turning down
+     those fees and losing potential earnings.
+     (The increase in fees may effectively censor certain
+     transactions, however)</li>
+ <li>Double-spending attempts are not costless to the
+     miner: work needs to be re-done in order to
+     rewrite recent history.
+     The cost of rewriting history becomes higher as
+     the number of confirmations required increases.
+     Finally, the benefit to the attacker of
+     double-spending is limited by the amount of coin
+     the attacker controls.</li>
+</ul>
+<p>In fact, specialized producers
+of a specific good are economically bound to adhere to
+the desires of the consumers; that is, miners will
+follow the desires of the hodlers of coins, regardless
+of centralization.</p>
+<p>However, we must take note that specialization leads
+to fragility to level-crossing physical attacks on the
+network.</p>
+<h2>Centralization and SPV</h2>
+<p>The analysis above assumes that every user directly
+or indirectly runs a mainchain fullnode.</p>
+<p>Under SPV, however, another attack may be performed
+by a miner;
+specifically, a miner may create an invalid block
+where it is invalidly paid a large amount of fees,
+generate a small chain on top of that, and use that
+chain to fool an SPV client into thinking it has been
+paid.
+Such an "<dfn>inflation attack</dfn>" would be much
+stronger in the case of centralization and prevalent
+SPV.
+It also has a higher incentive than double-spend
+attacks, as the purported amount does not need to be
+actually controlled by the attacker.</p>
+<p>(It is important to note that the fees received by
+a miner have no consensus limit and
+<a href='https://blockchain.info/en/tx/cc455ae816e6cdafdb58d54e35d4f46d860047458eacf1c7405dc634631c570d'>miners
+have received very high fees before</a>.
+This is important as transaction-tracing proofs like
+Peter Todd's Proofchains
+terminate at a coinbase transaction, whose value
+validity can only be judged by looking at all
+transactions in the block it is in.)</p>
+<p>For a "normal" SPV client that is controlled directly
+by a human user, this can be mitigated by the human
+user manually verifying the blocks being received by
+the SPV client using some kind of block explorer.
+Automated SPV clients, however, will either be under
+permanent risk of inflation attack, or will require
+constant human supervision (and hence, trust that the
+human supervisors are paying attention, and not, for
+example, forgetting to turn on their alarm clocks and
+oversleeping).</p>
+<p>Unfortunately, SPV proof sidechains and drivechains
+both turn the mainchain into an automated SPV client of
+the sidechain.
+In particular, under drivechains, mainchain miners are
+forced to pay attention to the sidechain in order to
+determine which way to vote.
+In effect, it requires that mainchain miners run
+sidechain fullnodes for all existing sidechains in
+order to prevent inflation attacks on any sidechain.
+This also means that sidechains translate directly into
+softforked block size increases, with the same results
+as other block size increases: increased pressure for
+mainchain miners to collocate in order to improve
+transmission of both mainchain and sidechain block
+data.</p>
+
+<h1>Sidechain End-of-life and Permissionless Innovation</h1>
+<p>The issue of sidechain end-of-life interacts badly with
+the stated intent of permissionless innovation.</p>
+<p>Consider for example a situation, where a reasonably-popular
+sidechain already exists, that has many similarities to the
+mainchain.
+Let us also consider the situation, that development of this
+sidechain is centralized, in comparison with the Core
+mainchain.</p>
+<p>Suppose a bright mind develops some idea for a mainchain
+feature, and creates a sidechain that is little more than
+mainchain in addition with this useful new feature.
+In a few months, it becomes obvious that the feature is
+useful, desirable, and has little or no negative effect.</p>
+<p>However, the developers of the pre-existing sidechain
+notice this feature, and implement it also on their own
+sidechain.
+This is reasonably easy as the sidechain developers are
+more centralized than Core mainchain is.</p>
+<p>From then on, the sidechain with a new feature is at
+end-of-life: the pre-existing sidechain not only has the
+new feature, it also has (by virtue of being older) better
+network effect, and possibly other features as well.
+Users then desire to leave the sidechain.
+Again, as I pointed out earlier, at end-of-life, expected
+future fees are expected to drop, and present backing
+funds become a target for theft.
+In addition, the new sidechain is likely to be a
+relatively small sidechain, and the rest of the Bitcoin
+community may be unwilling to economically sacrifice the
+Bitcoin network to punish those who steal from the
+small sidechain using "nuclear options".</p>
+<p>This suggests that permissionless innovation for
+existing chains already pegged to the mainchain is
+risky.
+One would have to create sidechains that are incompatible
+with mainchain and pre-existing sidechains (such as a
+MimbleWimble sidechain, or other chain with drastically
+different transaction format), or risk end-of-life.</p>
+
+
+</div>
+
+<div class=footer>
+<p>&copy; 2017 ZmnSCPxj.  Released under CC-BY.</p>
+</div>
+
+</body>
+</html>
