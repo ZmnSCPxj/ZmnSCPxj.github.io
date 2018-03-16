@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang=en>
+<head>
+<meta charset=utf-8>
+<title>Cyclic Superhubs as Solution Towards Reasonable Lightning Network Topology</title>
+</head>
+<body>
+
+<div class=header>
+<p><a href='../index.html'>ZmnSCPxj</a> &raquo; <a href='index.html'>Offchain</a> &raquo; Cyclic Superhubs as Solution Towards Reasonable Lightning Network Topology</p>
+</div>
+
+<div class=content>
+<h1>Introduction</h1>
+<p>A cyclic superhub is simply a group of three or more nodes that
+have specifically arranged their channels to form a cycle.</p>
+<pre>
+    A---&gt;B
+    ^    |
+    |    |
+    |    v
+    C&lt;---D
+</pre>
+<p>The concept applies to such topologies that have been
+<em>deliberately</em> set up to form cycles, not simply
+those, that happen to arise as happy accidents.</p>
+<p>Here are a few important observation, about cyclic superhubs:</p>
+<ol>
+<li>Any member of the superhub can pay any other member.</li>
+<li>As a consequence, any member of the hub can send via an
+outgoing channel of any other member.</li>
+<li>As another consequence, any member of the hub can receive via
+an incoming channel of any other member.</li>
+</ol>
+<p>Organizing by cyclic superhubs has the advantage that it reduces
+centralization of the network, and allows any member to send and
+receive, for only the cost of setting up a channel.</p>
+
+<h1>Breaking Superhubs</h1>
+<p>Suppose a superhub member goes down permanently or even
+temporarily, or closes one of its channels.
+This breaks the topology and prevents payments from an arbitrary
+member to an arbitrary member.</p>
+<pre>
+    A---&gt;B
+    ^    |
+    |    |
+    |    v
+    C    D
+</pre>
+<p>Even so, such broken superhubs still allow <em>some</em>
+connectivity among the other members.
+Superhubs may be more likely to have breakdowns than using a
+central hub, but superhubs &ldquo;fail gracefully&rdquo;;
+if a member breaks down, some transfers can still occur.
+Compare this to a central hub, where a breakdown of the
+center prevents <em>all</em> transfers.</p>
+
+<h1>Incentives</h1>
+<p>Nodes are incentivized, to join as many superhubs as they can
+afford to open channels with.
+This is because, if a node is a member of two such superhubs,
+then it serves as a bridge between them, earning fees for
+transfers between members of one superhub to members of the
+other superhub.</p>
+<p>In addition, joining multiple superhubs improves the chances
+that a node can successfully send or receive payment, in case,
+one of the superhubs it is a member of becomes broken.</p>
+<p>Finally, if a node joins multiple superhubs, it is likely
+to effectively form a superhub &ldquo;by accident&rdquo;.
+Consider the case where we have 6 nodes below, 3 of which
+join only one superhub, but 3 of which join two superhubs:</p>
+<pre>
+    A--&gt;B     D--&gt;E    B--&gt;C
+    ^  /      |  /     ^  /
+    | /       | /      | /
+    |L        |L       |L
+    D         F        E
+</pre>
+<p>If we combine the above to their overall topology:</p>
+<pre>
+    A--&gt;B--&gt;C
+    ^  /^  /
+    | / | /
+    |L  |L
+    D--&gt;E
+    ^  /
+    | /
+    |L
+    F
+</pre>
+<p>Nodes B, D, and E joined only two superhubs, but have also
+managed to form a superhub, by accident, between them.</p>
+<pre>
+        B
+       /^
+      / |
+     L  |
+    D--&gt;E
+</pre>
+<p>Note also that even the &ldquo;edge&rdquo; nodes A, C,
+and F now become members of a larger superhub of 6 members.
+This is relevant in case of a &ldquo;graceful failure&rdquo;
+of a superhub: if for instance the channel between B and D
+is closed, A can still pay D via the longer route
+A-&gt;B-&gt;C-&gt;E-&gt;F-&gt;D.</p>
+<p>Thus, nodes will want to join as many superhubs as they
+can afford to put into channels, as it makes it more
+likely they can earn, and more likely that their sends
+and receives succeed.</p>
+
+<h1>Coordination</h1>
+<p>Unfortunately some amount of coordination is needed to
+form superhubs in the first place.
+The nodes who want to form a superhub need to agree on
+which node creates channels to which other node.</p>
+<p>One can imagine that websites specifically for coordinating
+the formation of superhubs can be made.
+They would look at the existing known topology and allow
+users to request to join superhubs, then create plans for
+superhubs (who funds channels to who) for users who do
+not already have channels to each other.</p>
+<p>Such coordination services are not centralizing.
+It is very cheap and not so inconvenient to simply post
+on some Lightning Network-focused forum and say
+&ldquo;come form a cyclic superhub with me!&rdquo;,
+with the rule that the first 5 or so replyers form the
+superhub with the original poster, and funding channels to
+the previous poster and with the original poster funding a
+channel to the fifth replyer.</p>
+
+<h1>Conclusion</h1>
+<p>Encouraging cyclic superhubs encourages the formation of a
+grid-like network, which has the major advantage of having
+many alternate routes between different points.
+Thus we should encourage all sorts of nodes &mdash; consumers,
+employees, merchants, etc. &mdash; to become members of
+superhubs, instead of encouraging &ldquo;hub and spoke&rdquo;
+models.</p>
+
+</div>
+
+<div class=footer>
+<p>&copy; 2018 ZmnSCPxj.  Released under CC-BY.</p>
+<iframe src='../donation.html' frameborder=0 width='100%' />
+</div>
+
+</body>
+</html>
