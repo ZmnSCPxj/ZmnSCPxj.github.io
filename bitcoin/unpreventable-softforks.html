@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang=en>
+<head>
+<meta charset=utf-8>
+<title>On Unstoppability of Softforks</title>
+</head>
+<body>
+
+<div class=header>
+<p><a href='../index.html'>ZmnSCPxj</a> &raquo; <a href='index.html'>Bitcoin</a> &raquo; On Unstoppability of Softforks</p>
+</div>
+
+<div class=content>
+
+<h1>Introduction</h1>
+<p>It was brought to my attention, that a certain individual
+whose name shall not disgrace this page, wrote in an
+article whose address shall also not disgrace this page,
+regarding the deprecation of P2SH and the complete prevention
+of softforks in the altcoin that individual was making.</p>
+<p>This was quite interesting to me.</p>
+
+<h1>Could Softforks be Prevented? ...</h1>
+<p>...was the subject of a
+<a href='https://lists.linuxfoundation.org/pipermail/bitcoin-dev/2017-September/015004.html'>thread on bitcoin-dev</a>
+last year.</p>
+<p>The original poster identified, that anyone-can-spend
+outputs were the point, where softforks can be hooked.</p>
+<p>After some explanation, I pointed out the simple fact:
+that P2PKH is sufficient to create anyone-can-spend.
+Indeed, something as simple as paying to a singlesig
+pubkey is enough to create an anyone-can-spend output.</p>
+<p>The key insight is that a payment to a public key is
+spendable, by all who know the private key.
+If the private key is published to everyone, then
+anyone can spend the output.</p>
+<p>The obvious conclusion is that softforks are simply
+not possible to prevent.
+The most basic blockchain, requires at least some kind
+of public-private key cryptography.
+And the publication of a specific private key, is
+sufficient to allow anyone-can-spend.</p>
+
+<h1>Conclusion</h1>
+<p>While amusing, this points to a simple fact: that
+softforks are simply not preventable.
+Cryptocurrencies cannot be created which cannot be
+softforked, without losing simple security.</p>
+
+</div>
+
+<div class=footer>
+<p>&copy; 2017 ZmnSCPxj.  Released under CC-BY.</p>
+<iframe src='../donation.html' frameborder=0 width='100%' />
+</div>
+
+</body>
+</html>
