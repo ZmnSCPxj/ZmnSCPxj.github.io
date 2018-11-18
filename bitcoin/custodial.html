@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang=en>
+<head>
+<meta charset=utf-8>
+<title>On Custodiality</title>
+</head>
+<body>
+
+<div class=header>
+<p><a href='../index.html'>ZmnSCPxj</a> &raquo; <a href='index.html'>Bitcoin</a> &raquo; On Custodiality</p>
+</div>
+
+<div class=content>
+
+<h1>Introduction</h1>
+<p>Custodial wallets remain part of the Bitcoin space,
+despite common exhortations of "not your keys, not your coins".
+One common reason for using custodial wallets is scaling:
+if you send to or receive from somebody on the same custodial wallet,
+nothing needs to appear on the Blockchain.
+Custodial wallets are arguably an offchain construction,
+with all the scaling benefits of offchain constructions.</p>
+<p>However, custodial wallets are trusted third parties,
+<a href='https://nakamotoinstitute.org/trusted-third-parties/'>with
+all the issues associated with such</a>.</p>
+
+<h1>A Brief History of Bitcoin Scaling</h1>
+<p>The <a href='https://www.mail-archive.com/cryptography@metzdowd.com/msg09963.html'>first
+problem</a> of Bitcoin is scaling.
+It requires that every node
+is aware of every blockchain-level transaction,
+consuming tremendous bandwidth resources.
+Moving tranactions off the blockchain is necessary.</p>
+<h2>First Tries at Scaling</h2>
+<p>In 2014, <a href='https://www.blockstream.com/sidechains.pdf'>an
+offchain mechanism that itself used a blockchain construction</a>
+became popular.
+Eventual development of this idea lead to
+<a href='https://blockstream.com/strong-federations.pdf'>strong federations</a>,
+a custodian composed of multiple entities,
+which hold the money of their customer in trust.
+The use of m-of-n signatures ensures that a supermajority of
+the signing keys is needed in order to defraud the customers.</p>
+<ul>
+ <li><p>The strong federation requires trust in the federation.</p></li>
+ <li><p>The strong federation presumes that the whole federation
+        is more trustworthy than any of its parts.</p></li>
+ <li><p>Even though it is a trusted third party,
+        the federation does not prevent direct usage of the
+        base Bitcoin layer.</p></li>
+ <li><p>Important properties of the base Bitcoin layer
+        (censorship-resistance, non-inflation,
+        practical deployment of fullnodes)
+        are preserved.</p></li>
+</ul>
+<p>As of this writing (late 2018), two "strong federation"
+networks,
+<a href='https://www.rsk.co'>Rootstock</a> and
+<a href='https://blockstream.com/liquid/'>Liquid</a>,
+exist.</p>
+<h2>When Can I Truly Trust a Federation?</h2>
+<p>Suppose I refuse to trust anyone at all.
+Can I ever trust a federation, strong or not, to hold my coins?</p>
+<p>Surprisingly enough, yes.
+I just need to be part of the federation.
+The other side of "not your keys, not your coins"
+is "your keys, your coins".</p>
+<ul>
+ <li><p>I need veto rights on the federation so that the rest of the
+        federation cannot defraud me, so we must use
+        n-of-n multisig.</p></li>
+ <li><p>I need to have some way of moving money back to the
+        Bitcoin blockchain without permission from the rest of
+        the federation.</p></li>
+ <li><p>I don't need the federation to have many members, as
+        long as I am one of them.</p></li>
+</ul>
+<p>This segues to the <em>other</em> offchain scaling mechanism,
+payment channel networks.
+Let us examine first the payment channel.</p>
+<ul>
+ <li><p>They are rooted at a 2-of-2 multisig transaction output.</p></li>
+ <li><p>For modern payment channel designs, a backoff mechanism exists,
+        which allows a payment channels to be closed by one side
+        of the channel without the cooperation of the other side.</p></li>
+ <li><p>Payment channels have 2 endpoints.</p></li>
+</ul>
+<p>Each payment channel, then, represents a small federation
+of 2 members.</p>
+<p>Now, each payment channel can be considered its own cryptocurrency,
+pegged by its federation (the two channel endpoints) to Bitcoins on
+the Bitcoin blockchain.</p>
+<p>If payment channels could support HTLCs, then atomic swaps
+across multiple payment channels could be possible.
+Thus, payment channels that can transport HTLCs are powerful enough
+to build payment channel networks,
+which allow payment even without a direct channel
+between payer and payee.</p>
+<p>Unlike a centralized strong federation,
+on this network I do not need to trust anyone else
+to hold my coins.
+I need to pay somebody to transfer my coins,
+but the same is true for the Bitcoin blockchain anyway:
+hodling is free, payment has a fee.
+Thus, payment channel networks &emdash; the Lightning Network &emdash;
+have no trusted third parties.</p>
+<p>In summary:</p>
+<ul>
+ <li><p>Strong federations solve the issue of third-party trust
+        by making the third-party a single large conglomerate,
+        on the assumption that a conglomerate can be more
+        trustworthy than its parts.</p></li>
+ <li><p>Payment channel networks solve the issue of third-party trust
+        by requiring that every user be a signatory in every
+        federation (payment channel) he or she directly holds money in.</p></li>
+</ul>
+<h2>The Lesson of History</h2>
+<p>To my mind, Liquid and Lightning show a simple fact:
+premature optimization is the root of all evil.</p>
+<p>Strong federations tried to solve the issue of third party trust,
+by making large third parties that were trustworthy.
+In the end, however, strong federations are still custodians,
+and their use fails under the principle "not your keys, not your coins".</p>
+<p>It achieves scaling, true, but one can argue that a little more
+thinking let us devise Lightning Network.</p>
+<p>I predict (as of this writing, late 2018) that eventually
+Lightning will, in practice, be used for what Liquid is
+marketed today as providing:
+fast confidential transfers of large amounts.</p>
+
+<h1>Conclusion</h1>
+<p>I write this page, in reaction to common efforts to create
+custodial Lightning wallets.</p>
+<p>To my mind, custodial Lightning wallets represent the same error
+that Liquid committed:
+settling for a custodial system.</p>
+<p>I suggest that history shows us that people will be able to
+devise cryptocurrency systems that do not require third-party trust;
+one only needs to look at Lightning and how it is well-poised
+to supplant Liquid.</p>
+<p>Today, I do not know how we will be able
+to further scale Lightning
+without third-party trust.
+I do not know if we can discover some good way to do so;
+perhaps Lightning is the last possible way to scale without third parties.
+Or it might not be: perhaps we need only some missing key insight
+to scale further without sacrificing trustlessness.</p>
+<p>I humbly suggest, then, that those who are currently building
+custodial Lightning wallets,
+are better off investigating and devising systems that do not
+require a third party.</p>
+<p>Let us then consider custodiality as a fallback later on,
+when we have exhausted all available avenues of trustless scaling,
+and make a good-faith attempt to devise further trustless scaling.
+ZmnSCPxj late 2018.</p>
+
+</div>
+
+<div class=footer>
+<p>&copy; 2018 ZmnSCPxj.  Released under CC-BY.</p>
+<iframe src='../donation.html' frameborder=0 width='100%' />
+</div>
+
+</body>
+</html>
