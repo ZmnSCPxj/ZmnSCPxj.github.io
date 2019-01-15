@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang=en>
+<head>
+<meta charset=utf-8>
+<title>0-conf is Unsafe, Yet Offchain is Safe?</title>
+</head>
+<body>
+
+<div class=header>
+<p><a href='../index.html'>ZmnSCPxj</a> &raquo; <a href='index.html'>Offchain</a> &raquo; 0-conf is Unsafe, Yet Offchain is Safe?</p>
+</div>
+
+<div class=content>
+<h1>Introduction</h1>
+<p>A common advice in Bitcoin is to not trust 0-conf transactions.
+This is because 0-conf transactions are unsafe
+and easily double-spendable.</p>
+<p>However, one must also consider that offchain systems
+that provide some protocol
+with transactions that are signed but not broadcasted
+are effectively using unconfirmed transactions &mdash;
+0-conf transactions.
+Why would offchain systems be safe,
+if 0-conf transactions are not?</p>
+
+<h1>Why is 0-conf Unsafe?</h1>
+<p>We should primarily consider,
+why 0-conf is unsafe.</p>
+<p>0-conf transactions are unsafe since it is possible
+to double-spend the inputs they consume,
+invalidating the 0-conf transaction.</p>
+<p>If even a single input of the 0-conf transaction
+is spent by a different transaction
+that <em>does</em> get confirmed,
+then the 0-conf transaction can never be confirmed
+and the recipient will not receive funds.</p>
+<p>In short, 0-conf transactions are unsafe because
+they can be replaced with a different transaction.</p>
+<p>A recipient cannot trust an unconfirmed transaction
+unless it can somehow prevent this replacement.</p>
+
+<h1>Funding Transaction Pattern Adds Safety To 0-conf</h1>
+<p>The <a href='generalized.html'>funding transaction pattern</a>
+prevents replacement of an offchain unconfirmed transaction
+unless all parties to the offchain system
+agree to the replacement.</p>
+<p>This is because the onchain funding transaction output
+requires an n-of-n multisignature.</p>
+<p>A recipient in such a system must be one of the
+signatories of the n-of-n.</p>
+<p>As one of the signatories of the n-of-n, the recipient
+can ensure that the latest unconfirmed transaction is
+not replaceable, by the simple expedient of not signing any
+replacement transaction.</p>
+<p>This is the basis of trustless offchain system;
+as long as <em>you</em> can veto any updates you will find
+unacceptable, <em>you</em> retain control of your money.
+The other side of &ldquo;not your keys, not your coins&rdquo;
+is &ldquo;<em>your</em> keys, <em>your</em> coins&rdquo;.</p>
+<h2>Large Federation Error</h2>
+<p>A corollary of this is that federated sidechains and
+similar systems have fallen afoul of an error I call
+&ldquo;large federation error&rdquo;.
+This is the idea that we can reduce trust requirements by
+creating a large federation,
+in the hope that users will trust at least some subset of
+that federation,
+and by increasing the size of this federation,
+we increase the probability of including some entity
+that the user can find trustworthy.
+Indeed, even systems which make miners or stakers the
+federation guarding the operation of some offchain system
+fall into this error.</p>
+<p>In short, what is not required is a large federation,
+or a federation with dynamic membership, etc.
+What is needed is for <em>you</em>, the user, to be part
+of the specific federation that holds your money.</p>
+<p>Thus we can contrast Lightning Network,
+with its offchain protocol guarded by a 2-of-2 multisig.
+Every channel represents a federation of 2 members, both
+of whom control their own money.
+This provides security approaching the security of the
+base layer that a channel builds upon.</p>
+
+<h1>Conclusion</h1>
+<p>Offchain is 0-conf.
+However, 0-conf is unsafe due to replacement.
+0-conf becomes safe if the recipient of money in a
+transaction is one of the signatories in the transaction;
+it can always refuse to sign a newer version.</p>
+<p>This realization leads us to another: that an offchain
+system,
+such as a Lightning Network channel,
+is a tiny federation composed of the participants of the
+offchain system.</p>
+<p>We also realize that a federation need not be large
+in order to be safe;
+it only requires that the user of the federation be a
+member of that federation.</p>
+
+</div>
+
+<div class=footer>
+<p>&copy; 2018 ZmnSCPxj.  Released under CC-BY.</p>
+<iframe src='../donation.html' frameborder=0 width='100%' />
+</div>
+
+</body>
+</html>
