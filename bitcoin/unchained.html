@@ -38,7 +38,10 @@ on some hosting blockchain,
 reusing the same token,
 without launching a separate blockchain,
 while reducing (but not eliminating) the custodian theft risk
-that federated sidechains have.</p>
+that federated sidechains have.
+Practical deployment will probably require a federation,
+but at least eliminates the creation of
+<a href='https://www.cryptocurrencyguide.org/blockchain-is-just-a-very-slow-database-says-cryptocurrency-experts/'>a very slow database</a>.</p>
 
 <h1>Escrow Protocol</h1>
 <p>An escrow protocol is possible to implement using a 2-of-3
@@ -121,6 +124,15 @@ by creating a federation that runs the smart contract platform.
 The federation member keys can be tweaked with the smart contract script as above,
 then use whatever multisignature scheme
 the federation judges reasonable.</p>
+<p>For instance, a 9-of-12 federation smart contract platform might do:</p>
+<pre>
+OP_IF
+  &lt;n&gt; &lt;P1&gt;...&lt;Pn&gt; &lt;n&gt;
+OP_ELSE
+  &lt;C&gt; OP_CHECKSIGVERIFY 9 &lt;T1&gt;...&lt;T12&gt; 12
+OP_ENDIF
+OP_CHECKMULTISIG
+</pre>
 <h2>Benefits</h2>
 <p>This scheme massively increases privacy.
 If all participants agree (hopefully the common case)
@@ -141,8 +153,10 @@ and instead spend the fund according to their off-contract agreement.
 For example, they can agree to a modified smart contract
 that has been bugfixed.
 Thus, buggy smart contracts
-do not require a blockchain rollback
-in order to fix.</p>
+do not require a
+<a href='https://www.coindesk.com/ethereum-executes-blockchain-hard-fork-return-dao-investor-funds'>blockchain rollback</a>
+in order to fix,
+or even any interaction with the smart contract platform.</p>
 
 <h1>Improvements From Upcoming Bitcoin Innovations</h1>
 <p>Upcoming (as of mid-2019) improvements to Bitcoin
