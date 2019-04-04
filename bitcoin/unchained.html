@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang=en>
+<head>
+<meta charset=utf-8>
+<title>Smart Contracts Unchained</title>
+</head>
+<body>
+
+<div class=header>
+<p><a href='../index.html'>ZmnSCPxj</a> &raquo; <a href='index.html'>Bitcoin</a> &raquo; Smart Contracts Unchained</p>
+</div>
+
+<div class=content>
+
+<h1>Introduction</h1>
+<p>In cryptocurrency, smart contracts have traditionally been implemented
+as part of the consensus rules of some blockchain.</p>
+<p>In particular, innovations
+(or &ldquo;innovations&rdquo; like the infamous Ethereum Meta-Bug
+of allowing Turing-completeness and thereby footguns)
+on smart contracting languages have often needed a blockchain
+to provide even just a minimal proof-of-concept.
+(I am not even referring to a minimal viable product here.)</p>
+<p>Now, launching a new blockchain requires one of the following:</p>
+<p><ul>
+	<li><p>Creating your own token.</p></li>
+	<li><p>Becoming a sidechain reusing some existing token.</p></li>
+</ul></p>
+<p>The former is prone to accusations that the point of the innovation
+is to pump the token rather than the token supporting the innovation.
+The latter requires, with current Bitcoin (early 2019),
+using a federation,
+which is essentially a joint <a href='custodial.html'>custodian</a>
+of the money in the mainchain.</p>
+<p>This writeup, then, proposes an alternate method of creating
+a smart contract platform while requiring only basic functionality
+on some hosting blockchain,
+reusing the same token,
+without launching a separate blockchain,
+while reducing (but not eliminating) the custodian theft risk
+that federated sidechains have.</p>
+
+<h1>Escrow Protocol</h1>
+<p>An escrow protocol is possible to implement using a 2-of-3
+multisignature.
+The keys are the seller key, the buyer key, and the escrow key.</p>
+<p>If the buyer and seller are able to come to an agreement on
+what happened, then they sign a transaction sending the tokens
+to the correct destination.
+However, if there is a dispute between them, the escrow
+service steps in and sorts out where the money should go to.</p>
+<p>Generalizing this to a protocol with more than two participants
+aside from the escrow service, we find that there are two
+major branches:</p>
+<p><ol>
+	<li><p>Every participant agrees to the result without involving the escrow service.</p></li>
+	<li><p>One participant disagrees and brings in the escrow service to mediate.</p></li>
+</ol></p>
+<p>For the two-participant case, a 2-of-3 multisignature
+is the optimum way to provide the above contract.
+For more than two participants,
+we can use a script
+which may be claimed with either of the below branches:</p>
+<p><ol>
+	<li><p>N-of-N multisignature, one key per participant.</p></li>
+	<li><p>OR, 2-of-2 multisignature, one key from escrow service, other key is shared key known to all participants but <em>not</em> the escrow service.</p></li>
+</ol></p>
+<p>If every participant agrees, the first branch is taken.
+If a participant disagrees, they bring in the escrow service,
+which determines where the money should go,
+and then sign what the escrow service determines
+using the common key.</p>
+
+<h1>Smart Contract Platforms as Programmable Escrow Services</h1>
+<p>Smart contracts impose conditions
+on how a fund can be spent.
+In case of any dispute, the smart contract effectively decides
+how the fund gets spent.</p>
+<p>A platform that can plausibly enforce a smart contract
+then works as an escrow that determines who controls the money
+according to the terms of the contract.</p>
+<p>Thus a smart contract platform is a programmable escrow service.</p>
+
+<h1>Smart Contracts Unchained, or, Ethereum Blockchain Considered Extraneous</h1>
+<p>A smart contract platform, rather than implementing a completely new blockchain,
+can make use of an existing blockchain with simple smart contract functionality.</p>
+<p>This is done by making the platform an escrow service with the
+above given simple smart contract.</p>
+<p>The escrow service key is tweaked with a commitment to the
+contract that must be interpreted,
+using standard pay-to-contract protocols.
+For example, given the smart contract platform public key <code>E</code>,
+a smart contract serialization <code>s</code>,
+and a suitable cryptographic hash function <code>h</code>,
+the tweaked public key <code>T</code> is:</p>
+<pre>T = E + h(E | s) * G</pre>
+<p>Given public keys <code>P1</code>...<code>Pn</code> of each of the <code>n</code> participant,
+and the common public key <code>C</code> known by all participants but
+not the smart contract platform, the script to pay to is:</p>
+<pre>
+OP_IF
+  &lt;n&gt; &lt;P1&gt;...&lt;Pn&gt; &lt;n&gt;
+OP_ELSE
+  2 &lt;T&gt; &lt;C&gt; 2
+OP_ENDIF
+OP_CHECKMULTISIG
+</pre>
+<p>Each participant executes an interpreter of the smart contract language,
+and if all participants agree on the interpretation,
+sign with their participant keys.
+But if a participant diverges, they send the smart contract and
+any inputs required to the smart contract platform service.
+The smart contract platform service then signs using the tweaked key,
+and any participant can then add the common signature.</p>
+<h2>Tr*st, the five-letter curse word</h2>
+<p>The smart contract platform service cannot steal funds without the
+cooperation of at least one participant.
+Tr*st is still needed to an extent, but is reduced compared to a full custodian.</p>
+<p>Tr*st issues can be mitigated, as in the federated sidechains case,
+by creating a federation that runs the smart contract platform.
+The federation member keys can be tweaked with the smart contract script as above,
+then use whatever multisignature scheme
+the federation judges reasonable.</p>
+<h2>Benefits</h2>
+<p>This scheme massively increases privacy.
+If all participants agree (hopefully the common case)
+on the smart contract interpretation,
+then the smart contract platform never needs to learn
+about the details or even the existence of the contract.
+Contrast this to almost every blockchain implementation
+of an &ldquo;improved&rdquo; smart contract system,
+where the smart contract needs to be published onchain,
+publicly visible for all to see,
+greatly reducing privacy and fungibility.</p>
+<p>Another benefit is that
+if the smart contract turns out
+to have a breaking bug,
+the participants can get together and agree to <em>not</em>
+enforce the contract,
+and instead spend the fund according to their off-contract agreement.
+For example, they can agree to a modified smart contract
+that has been bugfixed.
+Thus, buggy smart contracts
+do not require a blockchain rollback
+in order to fix.</p>
+
+<h1>Improvements From Upcoming Bitcoin Innovations</h1>
+<p>Upcoming (as of mid-2019) improvements to Bitcoin
+greatly increase the power
+of the Smart Contracts Unchained technique.</p>
+<h2>MuSig and Schnorr-like Signatures</h2>
+<p>MuSig allows generation of threshold multisignature keys.
+This allows an m-of-n federation to provide only a single
+public key for smart contracts.
+In addition, the n-of-n multisignature of the participants
+can be compressed to a single public key.</p>
+<h2>Taproot</h2>
+<p>One branch of the script involves a simple n-of-n multisignature
+of the participants.
+The other branch is more complex as it involves a singlesignature
+and a threshold multisignature
+(if the smart contract platform is implemented as a federation).
+This is precisely the usecase that Taproot was designed for.</p>
+<p>This massively increases privacy,
+because in the case where every participant agrees,
+nobody knows that the smart contract platform was even used.</p>
+<h2><code>SIGHASH_NOINPUT</code></h2>
+<p>Even if a participant disagrees, it is still best if the
+smart contract platform
+never learns which exact UTXO is being disputed.
+By signing with <code>SIGHASH_NOINPUT</code>,
+the smart contract platform does not need to know
+the transaction output being spent;
+it only needs to know the smart contract and the inputs to the smart contract,
+as well as the value of the UTXO being spent.</p>
+<p>Now, if the signature created by the smart contract platform
+is used onchain,
+then the smart contract platform can simply scan the blockchain
+for the signature and learn the UTXO being spent.</p>
+<p>However, the existence of this signature defining where the
+funds will go to, can then be used to convince participants to
+sign the same transaction using their participant keys.
+Since the UTXO is now spendable with the platform signature,
+participants cannot gain from refusing to sign,
+and can retain privacy from the smart contract platform
+by signing.</p>
+<h2>Modified Mechanism</h2>
+<p>The mechanism can then be modified so as to
+pay to a Taproot address.
+The Taproot public key is the n-of-n multisignature of all the participants,
+while the Taproot script is:</p>
+<pre>&lt;T&gt; OP_CHECKDLSVERIFY &lt;C&gt; OP_CHECKDLS</pre>
+<p>The <code>T</code> is a tweaked version of the federation-generated
+threshold multisignature public key, and <code>C</code> is a
+common key known by all the participants.</p>
+
+
+<h1>Conclusion</h1>
+<p>Federated sidechains like Rootstock are extraneous
+since their primary innovation is a smart contract platform.
+However, as we present here,
+it is possible for a federation to provide a smart contract platform
+without implementing something as inefficient as an entire new blockchain.
+Instead, the Bitcoin blockchain can be reused without modification.
+Further, the benefits in privacy and smart-contract-patching
+greatly bring to question whether even Ethereum,
+which is supposedly not controlled by a federation,
+is necessary or desirable.</p>
+<p>Liquid, at least, provides confidential transactions and assets,
+which cannot be provided via this mechanism.
+However, its innovations to smart contracts, such as
+Simplicity and covenants,
+can be prototyped using this mechanism instead of on Liquid.</p>
+
+</div>
+
+<div class=footer>
+<p>&copy; 2019 ZmnSCPxj.  Released under CC-BY.</p>
+<iframe src='../donation.html' frameborder=0 width='100%' />
+</div>
+
+</body>
+</html>
