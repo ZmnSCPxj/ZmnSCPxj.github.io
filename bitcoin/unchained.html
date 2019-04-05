@@ -50,6 +50,25 @@ but at least eliminates the creation of
 		The &ldquo;as long as everyone agrees&rdquo; escape hatch seems to be new in this writeup, however.</p></li>
 </ul></p>
 
+<h2>Summary</h2>
+<p><ul>
+<li><p>We do not need to support a smart contract platform
+as part of consensus rules of a blockchain.</p></li>
+<li><p>Practical deployments of this idea
+probably still require a federation.</p></li>
+<li><p>This mechanism supports greater privacy
+than available on typical &ldquo;improved smart contract&rdquo; blockchains.</p></li>
+<li><p>This mechanism allows all participants
+to consensually decide to switch to a different smart contract
+(for example, if a bug is found in a complex smart contract,
+it is possible to switch to a patched version)
+or even switch to a different
+smart contract platform.</p></li>
+<li><p>Incoming improvements for SegWit v1,
+as expected as of April 2019,
+greatly improve this mechanism further.</p></li>
+</ul></p>
+
 <h1>Escrow Protocol</h1>
 <p>An escrow protocol is possible to implement using a 2-of-3
 multisignature.
@@ -164,10 +183,39 @@ do not require a
 <a href='https://www.coindesk.com/ethereum-executes-blockchain-hard-fork-return-dao-investor-funds'>blockchain rollback</a>
 in order to fix,
 or even any interaction with the smart contract platform.</p>
-<p>Both benefits arise from the first branch of the script:
+<p>Yet another benefit is resilience to the disappearance
+of the smart contract platform.
+If the smart contract platform disappears,
+the participants can still execute the contract themselves,
+and if they agree,
+can sign a spend that still follows the smart contract
+in spite of the smart contract platform disappearing.
+If the code for the smart contract platform is open source,
+then a new smart contract platform implementation can be created,
+and the participants can agree to switch
+to the new smart contract platform implementation
+in much the same way they can switch
+from a buggy smart contract to a bugfixed one
+as in the previous benefit.</p>
+<p>All these benefits arise from the first branch of the script:
 as long as everybody agrees, anything can be done,
 without asking the smart contract platform
 to enforce the contract committed to.</p>
+<h2>Participant-selected Federation</h2>
+<p>Currently, smart contract platforms implemented on federated sidechains
+indicate a fixed set of signatories as the federation.</p>
+<p>However, this mechanism does not require a blockchain,
+and therefore does not require a monolithic set of rules
+that is agreed-upon by consensus of everyone using
+the platform.</p>
+<p>In shorter sentences, this mechanism
+allows the participants to select the federation
+instead of a smart contract platform defining the federation.</p>
+<p>If it is possible to advertise that one is willing
+to serve in a federation,
+participants in a smart contract may select
+the federation members
+and agree on how much is considered a sufficient quorum.</p>
 
 <h1>Improvements From Upcoming Bitcoin Innovations</h1>
 <p>Upcoming (as of mid-2019) improvements to Bitcoin
