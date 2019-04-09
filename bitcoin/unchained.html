@@ -123,6 +123,8 @@ a smart contract serialization <code>s</code>,
 and a suitable cryptographic hash function <code>h</code>,
 the tweaked public key <code>T</code> is:</p>
 <pre>T = E + h(E | s) * G</pre>
+<p>Given the private key <code>e</code> of the escrow,
+the above has corresponding private key <code>t = e + h((e * G) | s)</code>.</p>
 <p>Given public keys <code>P1</code>...<code>Pn</code> of each of the <code>n</code> participant,
 and the common public key <code>C</code> known by all participants but
 not the smart contract platform, the script to pay to is:</p>
@@ -141,6 +143,8 @@ But if a participant diverges, they send the smart contract and
 any inputs required to the smart contract platform service.
 The smart contract platform service then signs using the tweaked key,
 and any participant can then add the common signature.</p>
+<p>In order for the smart contract platform to be profitable,
+it is likely to extract a fee for each usage.</p>
 <h2>Tr*st, the five-letter curse word</h2>
 <p>The smart contract platform service cannot steal funds without the
 cooperation of at least one participant.
