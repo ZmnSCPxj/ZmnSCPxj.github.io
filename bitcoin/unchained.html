@@ -297,6 +297,83 @@ of Bitcoin SCRIPT is no longer an issue,
 as there is no blockchain needed
 to enforce the rules for the smart contract platform.</p>
 
+<h1>Addendum: Federated Permissioned Blockchains Are Better Implemented As Smart Contracts Unchained</h1>
+<p>Blockchain technology has become so much of a buzzword
+that strange constructions like &ldquo;permissioned&rdquo;
+blockchains have arisen.</p>
+<p>Blockchains are slow databases which are primarily of use
+in coordinating large groups of people without prejudice.
+Permissioned blockchains have the bloat of blockchains,
+without the benefit of permissionlessness.</p>
+<p>Often, transaction ordering in such blockchains is controlled
+by a fixed signer set,
+effectively a federation.
+Also very often, typical nodes are not expected to perform validation
+(due to the blockchain bloat),
+but are instead expected to leave transaction validation to
+the fixed signer set.</p>
+<p>Such blockchains are better implemented using
+Smart Contracts Unchained as described here.
+The federation, rather than signing every block
+in an overly-restricted blockchain,
+instead signs transactions on the public Bitcoin blockchain
+only in the event of a dispute between the participants.</p>
+<p>This has benefits over a permissioned blockchain:</p>
+<p><ul>
+  <li><p>Often, a permissioned blockchain is proposed to
+         be used by an entire industry.
+         The signatories are often large companies within
+         that industry.
+         However, the signatories end up knowing every
+         transaction within the permissioned blockchain,
+         a condition that strongly encourages the formation
+         of cartels by the large companies,
+         suppressing small competitors.
+         The privacy-by-default of Smart Contracts Unchained
+         prevents this.</p></li>
+  <li><p>When a signatory turns out to have engaged in malicious
+         or destructive business practices,
+         it is often impossible or impractical
+         to remove them from the signatory set.
+         An entire industry may be paralyzed
+         by such an event, with participants
+         finding it unpalatable to use the permissioned blockchain
+         due to the malicious signatory,
+         yet finding it difficult to engage in economic activity
+         within the industry outside of the blockchain.
+         Smart Contracts Unchained allows all participants in
+         an industry-defined contract
+         to agree to modify the federation themselves
+         to remove such known-bad actors.</p></li>
+  <li><p>The contracts needed by commercial and industrial
+         entities are often significantly more complex
+         than the simple contracts supported by Bitcoin.
+         This can easily lead to foot-shootings where a contract
+         may have a subtle bug that cannot be easily found
+         until deployment.
+         Permissioned blockchains can handle widespread
+         deployment of a buggy contract by rolling back
+         the blockchain, but rollbacks are disruptive
+         and may reverse time-sensitive transactions,
+         leading to only being used in large-scale problems.
+         Contracts that are not widely used but are buggy
+         will often not warrant the disruption of the
+         industry, and will simply be allowed to remain
+         buggy.
+         Smart Contracts Unchained allow the participants
+         to switch contracts from a buggy
+         to a bug-free version.</p></li>
+</ul></p>
+<p>Private, permissioned blockchains have little to no
+practical use,
+and even if an industry might find
+that a standardized way of
+describing economic interactions
+to be
+potentially useful,
+such can be implemented using
+Smart Contracts Unchained technique.</p>
+
 </div>
 
 <div class=footer>
