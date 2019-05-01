@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang=en>
+<head>
+<meta charset=utf-8>
+<title>Chaumian CoinJoinXT</title>
+</head>
+<body>
+
+<div class=header>
+<p><a href='../index.html'>ZmnSCPxj</a> &raquo; <a href='index.html'>Bitcoin</a> &raquo; Chaumian CoinJoinXT</p>
+</div>
+
+<div class=content>
+
+<h1>Introduction</h1>
+<p><a href='https://joinmarket.me/blog/blog/coinjoinxt/'>CoinJoinXT</a>
+is a privacy-enhancing technique
+by which a group of participants
+creates a subgraph of transactions
+that pay out to each participant
+what that participant put in.</p>
+<p>In this writeup I present a Chaumian,
+equal-valued CoinJoinXT.</p>
+<h2>Characteristics</h2>
+<p><ul>
+  <li><p>Equal-valued.
+         Each participant commits an equal amount
+         plus change,
+         with better privacy assurances to the
+         equal-valued outputs they own
+         compared to their change outputs.</p></li>
+  <li><p><a href='https://joinmarket.me/blog/blog/the-steganographic-principle/'>Steganographic</a>.
+         If analysts are unable to identify
+         the CoinJoinXT,
+         they will be actively misled
+         about the interpretation of
+         the transaction subgraph.</p></li>
+  <li><p>Open Fungibility Fallback.
+         Even if analysts <em>are</em> able to identify
+         the CoinJoinXT,
+         they will still be unable to
+         link the equal-valued outputs
+         to inputs,
+         falling back to the same
+         open fungibility as Chaumian CoinJoin.</p></li>
+  <li><p>Requires Schnorr.
+         Or at least some kind of
+         aggregated multisig,
+         which could become possible
+         in ECDSA with some effort.</p></li>
+  <li><p>Trustless.
+         There is a central server, but it cannot
+         steal funds.</p></li>
+</ul></p>
+
+<h1>Protocol</h1>
+<p>As is usual for Chaumian mixes,
+there exists a central server that operates
+as a Chaumian bank.
+Extra care is taken in this protocol
+to ensure that input providers only release
+their funds
+if they can acquire the equivalent amount
+as output of the mix.</p>
+<p><ol>
+<li><p>The central server declares the equal output value,
+a time limit L as a future block height,
+a confirmation depth D in blocks,
+and a feerate it charges for the mix service.</p></li>
+<li><p>Clients connect over Tor to the server and
+check if they find the mix characteristics acceptable.</p></li>
+<li><p>Client provides one or more <dfn>introductory transactions</dfn>,
+which are signed but invalid transactions
+that pay out to one output
+with an invalid empty <code>scriptPubKey</code>.
+These outputs will be filled with a SegWit address
+derived later, and the total value must exceed
+the equal output value.
+All inputs of all introductory transactions must be SegWit.
+The client also indicates a destination <code>scriptPubKey</code>
+for its change output,
+and a separate <code>scriptPubKey</code>
+for its backout output.</p></li>
+<li><p>Client provides a <dfn>mix session public key</dfn>,
+together with a signature of an empty message using that public key,
+to attest that it knows the private key.</p></li>
+<li><p>Server waits until enough clients have registered their inputs.</p></li>
+<li><p>Server may add one or more of its own inputs, which it can
+merge together with fees it charges for the mix.</p></li>
+<li><p>Server generates the <dfn>aggregate mix session public key</dfn>,
+which is the multisignature public key aggregated from the individual
+client mix session public keys.
+Every output generated as intermediate output of the subgraph
+must be derived trivially from the aggregate mix session public key,
+but must be distinct from it to prevent information leakage.</p></li>
+<li><p>Server generates output public keys for each introductory transaction.
+It fills in the <code>scriptPubKey</code> of the introductory transaction
+to the output public key,
+creating the corresponding <dfn>entry transaction</dfn>.
+It also generates the <dfn>backout transaction</dfn>,
+which spends the entry transaction
+and pays out to the indicated backout <code>scriptPubKey</code>
+for that client,
+and has an <code>nLockTime</code> of L.
+The server generates these also for any of its own inputs that it
+wishes to add to the mix to merge with the fees it extracts.</p></li>
+<li><p>Server provides all the entry transactions and backout transactions
+to all clients,
+together with the tweak used for each entry transaction output.</p></li>
+<li><p>Each client checks that all of its own introductory transactions
+were included as an entry transaction,
+and that the backout transactions spending those
+entry transactions are valid and pay to their
+chosen backout address.
+Then each client gives its share of the signature
+to all backout transactions,
+and stores all the entry transaction outputs
+as the <dfn>input UTXO set</dfn>.</p></li>
+<li><p>Server combines all signatures to all backout transactions,
+including any tweaks it added to blind the public key,
+and then sends the signatures to the backout transaction of each client to that client.</p></li>
+<li><p>Client verifies that the signature to their backout transaction
+is valid,
+then signs their entry transaction and broadcasts it
+over the Bitcoin network, as well as giving a signed copy to the server.</p></li>
+<li><p>Each client and server generates a blinded signature that the client
+will later use to claim an output.</p></li>
+<li><p>After a random time, each client connects over a new
+Tor circuit to the server,
+unblinding the signature and presenting it as proof that
+the server should consider it a valid payee.
+Client provides two <code>scriptPubKey</code> to be used as
+output addresses, then disconnects this connection
+(but retains its previous connection that it used for inputs).</p></li>
+<li><p>Server generates the <dfn>proposed transaction graph</dfn>.
+A later section of this writeup will propose methods of generating
+this transaction graph.
+A key element is that there exists a <dfn>keystone transaction</dfn>
+that every other transaction in the graph must directly spend,
+or spend a transaction that transitively spends a transaction that spends
+directly from the keystone transaction.
+The keystone transaction itself does not spend any other transaction
+in the transaction graph.
+Every output of a transaction that is spent by another transaction
+(an <dfn>intermediate output</dfn>)
+in the proposed transaction graph must be a tweak from
+the aggregate mix session public key.
+All transactions in the proposed transaction graph must have
+<code>nLockTime</code> between the current block height,
+and less than L.
+Transactions must have equal or greater <code>nLockTime</code>
+as transactions they spend, except for the keystone transaction
+which has <code>nLockTime</code> equal to the current block height.
+The server must also includes its own fee payout (merged with inputs it added)
+as an output of the proposed transaction graph.</p></li>
+<li><p>Server waits for all entry transactions to be confirmed with depth D.
+If the time L becomes too near,
+the server aborts the protocol and blames all entry transactions that have
+not confirmed with depth D by that time, banning the transaction outputs
+involving those entry transactions from future mix rounds.</p></li>
+<li><p>Server provides the proposed transaction graph to each client,
+together with the tweak on each intermediate output.</p></li>
+<li><p>Client validates that the proposed transaction graph has a keystone
+transaction,
+that all non-keystone transactions spend directly or indirectly
+from the keystone transaction,
+that non-intermediate inputs spent belong to the input UTXO set,
+and that non-intermediate outputs pay to their
+indicated change and output addresses,
+and that the payouts are correct, i.e. their change is correct
+and the payouts to their output addresses sum up to the
+equal value indicated.</p></li>
+<li><p>Client provides its share of the signature for all non-keystone
+transactions to the server.</p></li>
+<li><p>Server aggregates the signatures for all non-keystone transactions,
+applies the tweaks to each output spend,
+and provides all non-keystone transaction signatures to all clients.</p></li>
+<li><p>Client validates the signatures of the non-keystone transactions.
+Then it provides its share of the signature for the keystone transaction.</p></li>
+<li><p>Server aggregates the signatures for the keystone transaction,
+applies the tweaks to the inputs being spent,
+provides the aggregated signatures for the keystone transaction to all clients,
+and then broadcasts the keystone transaction.</p></li>
+<li><p>Clients and server wait until the entire transaction graph is
+published onchain.</p></li>
+</ol></p>
+<p>Of note is that the above protocol inverts the use of backouts
+and promise UTXOs compared to the original CoinJoinXT proposal.
+The above protocol has backouts on each proposed input, rather
+than on the proposed transaction graph that could be invalidated
+by a proposed input.
+This allows for easier scaling to more users and more complex graphs,
+at the cost that each promised input has to be confirmed deeply
+before signing the proposed transaction graph.
+This will often lead to simple one-input one-output entry transactions,
+which could be used as a way to expose a Chaumian CoinJoinXT.</p>
+
+<h1>Generating the Proposed Transaction Graph</h1>
+<p>Before creating the proposed transaction graph,
+the server assigns some values to each client output addresses,
+summing up to the equal value given to each client output.
+The server can choose one output address to be equal to some
+&ldquo;round&rdquo; number of some fiat amount,
+or some &ldquo;round&rdquo; amount of bitcoins,
+or equal to a change output to make it less clear to third parties
+whether an output is change or part of an equal-valued output.
+Once it has assigned values to each pair of output addresses,
+it can break the pair and treat each output independently,
+and also shuffle them with the change outputs it also has to pay out.</p>
+<p>The simplest way to generate the proposed transaction graph
+is to shuffle the inputs, shuffle the outputs,
+then generate transactions by taking inputs until the topmost output
+can be covered,
+popping off the involved inputs and outputs,
+and ensuring that succeeding transactions always spend the change output
+of the previous transaction.
+The first transaction in this sequence is then the keystone transaction.</p>
+<p>The above simple strategy leads to a long straight chain of transactions,
+which might be long enough that many transactions have to have the same
+<code>nLockTime</code> in order to fit within the current blockheight
+and the time limit L.
+This long chain of transactions matches peel chains in blockchain analysis,
+indicating that there is a single wallet that has received a number of inputs
+and is now paying out apparently random-valued outputs.</p>
+<p>It would be possible to randomly assign inputs and outputs to two
+&ldquo;virtual&rdquo; wallets.
+One of the wallets will have more total input value than output value,
+so has to pay the difference to the other wallet;
+this initial transaction is the keystone, so the change must be spent
+by the paying virtual wallet while the received output of the payee
+must be treated as the change that must be spent by the payee virtual
+wallet.
+Then two peel chains are generated.</p>
+<p>The splitting strategy can be repeated to split the payouts
+further to more virtual wallets,
+taking care that each virtual wallet has a spendable input that
+is directly or indirectly an output of the keystone.
+Blockchain analysts will be able to identify these wallets as
+separate clusters,
+making it less likely that they will realize that it is really
+an equal-sized CoinJoin.</p>
+
+</div>
+
+<div class=footer>
+<p>&copy; 2019 ZmnSCPxj.  Released under CC-BY.</p>
+<iframe src='../donation.html' frameborder=0 width='100%' />
+</div>
+
+</body>
+</html>
