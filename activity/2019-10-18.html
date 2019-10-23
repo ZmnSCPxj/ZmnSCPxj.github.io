@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang=en>
+<head>
+<meta charset=utf-8>
+<title>2019-10-18 to 20 Lightning Conference</title>
+</head>
+<body>
+
+<div class=header>
+<p><a href='../index.html'>ZmnSCPxj</a> &raquo; <a href='index.html'>Activity</a> &raquo; 2019-10-18 to 20 Lightning Conference</p>
+</div>
+
+<div class=content>
+<h1>2019-10-18</h1>
+<h2>Random Discussions</h2>
+<p>Some random discussions with Rusty et al. about various topics,
+unfortunately connection between the human-interface agent and primary
+cognitive substrates was periodically failing/lagging due to sudden change in
+experienced timezone at the human-interface agent end, thus no reliable
+report can be made regarding these topics.
+Primarily, the main purpose of this activity ended up being simply to
+promote better human interaction at the human-interface agent end
+and training its lower-level interaction protocols better with little
+oversight from primary cognition.</p>
+<h2>AuthGate devices</h2>
+<p>AuthGate devices with Payment Attestation Contract was demonstrated.
+Main takeaway is that there is some undescribed method of acquiring
+proof-of-payment by passing it through the buyer mobile device connecting
+to the server, and the point-of-sale device simply needs to validate
+the payment attestation.</p>
+<p>Unfortunately, there are no concrete plans to open-source the point-of-sale
+device, either at software or hardware, making it difficult to independently
+evaluate, and thus potentially less interesting that it might otherwise be.
+Primary cognition pointed out later, during better connectivity with the
+human-interface agent,
+that Trezor open-sourced both the software and hardware design, and seems to
+have done successfully in its space.</p>
+<h2>Lightning Spec Meeting</h2>
+<p>As nearly all developers were attending the premeetup anyway, a spec
+meeting was also held.
+Previous face-to-face spec meeting was under Chatham House rule, so I assume
+this spec meeting was as well; thus discussions directly during the spec
+meeting do not ascribe identity to who said what.</p>
+<p>Due to aforementioned unreliable connection / lag between human-interface
+agent and primary cognition system, again there is little activity to report on,
+however these topics may be of interest.</p>
+<h3>2p-ECDSA Implementation</h3>
+<p>Someone mentioned that 0 or more <code>lnd</code> developers already actually have
+a 2p-ECDSA implementation somewhere.
+General consensus among Lightning developers seems to be that this is still
+a good fallback eventually if base layer Schnorr gets unexpected delays,
+though we should still really want to use Schnorr later anyway regardless
+(because 128-bit).
+Some notes:</p>
+<p><ul>
+ <li><p>While implementing an additional Paillier cryptosystem is indeed an
+        added complication, Paillier itself is simple and the implementation
+        of 2p-ECDSA was not very hard; someone noted that it was &ldquo;just
+        two additions and a multiply&rdquo; (warning: primary cognition was
+        not connected at this point and these are extracted from system logs
+        of the human-interface agent post-facto, thus possibly inaccurate).</p></li>
+ <li><p>What happened with <code>SIGHASH_NOINPUT</code> was cited: originally
+        proposed as a &ldquo;simple&rdquo; addition of a sighash flag, it
+        has since exploded into a year-long debate.
+        Concern exists that similar may occur in the Schnorr effort for
+        SegWit v1.</p></li>
+</ul></p>
+<p>The general hope seems to be that 2p-ECDSA will not be necessary, but
+in any case, we do have a viable fallback plan in case of further
+delays in SegWit v1 deployment.</p>
+<h3><code>SIGHASH_NOINPUT</code> Proposal</h3>
+<p>In passing, someone mentioned the <code>SIGHASH_NOINPUT</code> proposal.
+The next iteration of this proposal will propose the use of new
+pubkey types to indicate that <code>SIGHASH_NOINPUT</code> may be used to
+sign for that pubkey.
+This is a form of hidden output tagging, which is acceptable to me.
+It seems likely that chaperone signatures will not be proposed anymore.</p>
+<h3>Protocol Extensions</h3>
+<p>As proposed by me in lightning-rfc
+<a href='https://github.com/lightningnetwork/lightning-rfc/pull/623'>#623 I can has extension?</a>.</p>
+<p>Maxim Orlovsky noted after the spec meeting that this was not being discussed
+at all at the spec meeting, and he wanted to use it for some features he was
+working on.
+It seems to me that the general consensus among the other developers was
+that you could simply grab some unused message number without requiring the
+extra overhead of a modal switch like I proposed, which seems to have
+worked well so far (though as the number of developers poking at the
+specs layer grows, that may change).</p>
+
+<h1>2019-10-19</h1>
+<h2>Stuck Payment Occurence Rates</h2>
+<p>Christian Decker mainly presented much data about the existing Lightning
+Network.
+One item of note was the rate of stuck payments (i.e. payments that took a
+long time to resolve).
+According to Christian, only 0.19% of his probes ended in stuck payments.</p>
+<p>Regardless, it still seems to me that Stuckless is still valuable, as
+the point at which a payment was judged &ldquo;stuck&rdquo; is arguably
+arbitrary, and practical payment systems might actually want to reduce the
+experienced payment latency by the user by using much shorter
+&ldquo;stuckness&rdquo; thresholds before making another parallel attempt.
+In addition, the ACK used by Stuckless seems to me to still remain as a
+good hook for particular special setups, including Escrow-over-Lightning.</p>
+<h2>On Greater Efficiency than Proof-of-Work</h2>
+<p>In a direct conversation, Rene Pickhardt asked if I was satisfied with
+the amount of energy consumed in order to mine merely one transaction.
+He claimed that, using the energy rate for Germany (0,30 EUR per kilowatt),
+one transaction would cost 300 USD.</p>
+<p>I largely agree that the amount of energy needed to mine a single
+transaction is indeed <strong>worth the cost</strong>.
+In particular, I pointed out that for most large-scale mining, the cost
+per kilowatt would often be far smaller than what he quoted (I believe it
+to be 0.04 USD per kilowatt in places where mining is profitable, and that
+is a minimum of profitability).
+This meant that the cost of one transaction would be nearer to 30 USD
+(or less) than 300 USD.</p>
+<p>Still, 30 USD for one transaction is quite large, and obviously some
+amount of the energy used in current mining is subsidized by both enthusiast
+miners as well as (effectively) from cost-averaging HODLers, due to the
+increase in near-term supply caused by the block subsidy.</p>
+<p>I think that the ability of channel factories (and possibly my nodelets
+concept) to have one onchain transaction back the money of many people
+would greatly amortize the cost of onchain transactions, thus even a 30 USD
+(by late 2019 prices) would be quite reasonable to create a small subnet of
+the Lightning Network.</p>
+<h3>It All Reduces to Thermodynamics</h3>
+<p>Nothing can be more efficient than proof-of-work.
+It is physically impossible to make something more efficient than
+proof-of-work.</p>
+<p>More specifically, what we actually desire is a proof-of-entropy.</p>
+<p>In classical physics, almost all physical phenomena are reversible in time.
+The sole exception is entropy (in particle physics a few rare phenomena are
+believed to be mildly irreversible in time, but entropy still dominates
+in terms of irreversibility in time).</p>
+<p>That is, the
+<a href='https://en.wikipedia.org/wiki/Entropy_(arrow_of_time)'>arrow of time</a>
+points the future towards the direction of greater entropy.
+That is, we can only measure time in terms of a measure of increased entropy.</p>
+<p><ul>
+ <li><p>The current definition of 1 second is measured in terms of the decay of
+        <a href='https://en.wikipedia.org/wiki/Isotopes_of_caesium#Caesium-133'>Caesium atoms</a>.
+        This decay represents the reduction of energy of the atoms and thus
+        an increase in universal entropy.</p></li>
+ <li><p>Wind-up clockwork watches are powered by the controlled
+        release of the energy stored in a spring, a consumption of
+        stored energy and thus an increase in universal entropy.</p></li>
+ <li><p>Hourglasses move a measure of sand from a higher container to a lower
+        container, with the sand particles moving from their elevated height
+        to the lower height due to gravity, a consumption of available energy
+        and thus an increase in universal entropy.</p></li>
+</ul></p>
+<p>All measures of time are measures of entropy.</p>
+<p>In defining the valid ordering of transactions, the most logical is to
+order them in time.
+Thus, we need some method to measure the passing of time, and thus determine
+that one block occurred before the other time.
+While causality (i.e. just hash a commitment to the previous block, which
+cannot be done non-causally unless we have found the fixed point of a
+one-way hash function) can
+provide such an arrow of time, in the case of two blockchains with equal
+number of such chained commitments, we can only determine which one represents
+greater history (and thus the &ldquo;more valid&rdquo; chain) by comparing
+their proof-of-time-passing, which is a proof-of-increasing-entropy.</p>
+<h4>The Irony of Proof-of-Work</h4>
+<p>Of course, it should be noted that blocks that &ldquo;win&rdquo; the
+proof-of-work lottery of Bitcoin are blocks that have
+<em><strong>low</strong></em> entropy.
+Increase in entropy is simply some universe-state where there are more
+possibilities, i.e. particles are likelier to be in more random places.
+But high-difficulty blocks have hashes where many of the bits are 0s, i.e.
+the particles representing those bits are in a specific &ldquo;0&rdquo;
+state, unlike a randomly-selected hash where most or all of the bits have
+a 50-50 chance of being 1 or 0.</p>
+<p>One can compare the operation of miners to refrigeration.
+Heat simply means that particles are more likely to be in more
+places due to &ldquo;vibrating&rdquo; more.
+Thus, refrigeration effectively reduces the entropy (i.e. negentropy) of
+some location, reducing the temperature there.</p>
+<p>However, thermodynamics still must reign supreme.
+Refrigeration does not merely transfer the heat from one place to
+another: it requires <em>work</em> to actually perform the heat
+transfer from cold to hot, since entropy means that heat transfer
+normally goes from hot to cold.
+That is, refrigeration means that locally, in some place, entropy is
+reduced, but universally, entropy is increased <em>even more</em>
+than the reduction of entropy in that locality.</p>
+<p>Thus, proof-of-work submits low-entropy blocks, which then serves
+as a proof that universally (due to refrigeration / mining that
+specifically lowered the entropy of the submitted blocks) entropy
+increased.</p>
+<p>Perhaps a future proof-of-increased-entropy might exist which
+involves directly measuring the universal increase in entropy
+used to measure the passage of time, rather than this slightly
+indirect approach of showing low-entropy blocks to imply the
+increase in universal entropy via refrigeration processes.
+However, in the end it still resolves to usable energy and its
+transformation from usable to unusable, as that is the very definition of
+entropy itself, and it is the increase in entropy that we seek to
+measure, as a measure of the passage of time.</p>
+<h2>Fees on Mutual Close</h2>
+<p>One talk mentioned in passing that the fees involved at mutual closure
+was a common complaint among users.
+Specifically, often users think that they do not need fast closure,
+and would rather that the mutual close have much lower fees.</p>
+<p>Users should be educated that mutual closes are <em>mutual</em>.
+In particular, mutual closes are <em>negotiated</em>.
+Though one user might not believe they need a fast closure,
+the counterparty of the channel might very well prefer a fast
+confirmation of the mutual close transaction.</p>
+<p>The first step in the mutual close ritual is for both peers to
+make their initial proposals.
+Then, the peers take turns creating counter-proposals until both
+peers have sent the same fee.
+The only rule imposed is that the counter-proposal must be at least
+1 satoshi closer to the other proposed fee.
+Typical implementations will move their proposal between 1/4 to 1/2
+of the way to the other proposed fee.</p>
+<p>If the user initiating the close wants to close at a lower feerate,
+it would be possible to make its node play hardball and have it only
+move its proposed fee by 1 satoshi at each counter-proposal.
+However, nothing prevents the other side from itself playing hardball
+by also moving the fee by 1 satoshi in its own counter-proposal.
+Thus, much communications bandwidth would be required to get both peers
+to negotiate a common fee, which will end up being halfway between the
+initial proposals of both peers anyway.</p>
+<p>In shorter words, users should accept that mutual closes are
+mutual and negotiated, and thus both peers are likely to be
+dissatisfied with the resulting fee.</p>
+<p>Perhaps the mutual close ritual can be modified by letting either
+peer offer to pay for the difference in fees, however this can lead
+to significant game theory issues, which are a big headache in general.</p>
+<h2>Hedging Onchain Fees</h2>
+<p>Jack Mallers pointed out that the pain of onchain fees might be
+ameliorated by use of a derivative market in Bitcoin onchain fees.
+It must be remarked that the topic of onchain fees caused someone to comment
+&ldquo;I&apos;VE NEVER SEEN SO MUCH BLOOD&rdquo; during the Adelaide
+Lightning Developer meeting.
+So this topic is actually quite apropos and Jack Mallers deserves
+kudos for bringing this up.</p>
+<p>Briefly, it seems to me that the actual derivatives can be done via
+DLC oracles.
+Nadav has also recently been posting how to construct DLC arrangements
+over Lightning, though his constructions only allow for binary
+options and only allow the oracle to publish one of two possibilities.
+Finally, defiads seems to me a good way for miners to advertise their
+sale of fee long contracts.</p>
+<p>In particular, we should note the below:</p>
+<p><ul>
+ <li><p>DLC disincentivizes cheating by an oracle, by revealing the
+        private key of the oracle as a proof-of-fraud.</p></li>
+ <li><p>Defiads requires coins to be locked in a stake contract in
+        order for an advertisement to propagate over the defiads
+        network.</p></li>
+</ul></p>
+<p>It may be possible to have DLC oracles give slightly stronger
+assurances than merely the threat of private key revelation, by
+requiring (or allowing as an option) that the defiads-locked coins be
+protected by the same keypair that the oracle risks if it reveals
+diverging accounts of the world.
+That way, at the end of the defiads advertisement period, the oracle
+risks losing its staked funds.
+In patricular, locked funds are locked with a
+<code>OP_CHECKSEQUENCEVERIFY</code>, which automatically requires
+the recovery transaction to be marked replace-by-fee,
+and thus means that publication of the private key will lead to
+repeated RBF attempts until most of the value has been offered as
+fee to miners.
+This prevents the oracle from double-publishing, though does
+not prevent the oracle from singly-publishing the wrong thing.</p>
+<p>Further, by using a decentralized mechanism (defiads) to
+additionally allow oracles and futures contract sellers to be
+found by users in a decentralized and hard-to-censor manner, we can
+provide easily on any node, without tying ourselves to specific
+services (that may someday be bought or otherwise acquired by
+entities that prefer Bitcoin to fail).</p>
+
+<h1>2019-10-20</h1>
+<p>A portion of this day was spent discussing with 0 or
+more anonymous attendees, thus some topics and details cannot be
+published here.
+Further, this was also the day I presented, thus, even outside
+of my specific talk, I paid less attention to other discussions
+and presentations.</p>
+<h2>Survey of Routing Topics</h2>
+<p>My friend Rene Pickhardt listed out 10 topics regarding
+routing and so on.
+I would like to point out that this list is nowhere near
+complete.
+Of note is that the developers of the &ldquo;big three&rdquo;
+implementations attending the talk all
+agreed that there were 10 or more topics, even though
+most others, when asked, had guessed far less than ten.</p>
+<p>Here are a few more:</p>
+<p><ul>
+ <li><a href='https://lists.linuxfoundation.org/pipermail/lightning-dev/2019-March/001940.html'>Routemap Pruning</a></li>
+ <li><a href='https://lists.linuxfoundation.org/pipermail/lightning-dev/2019-March/001941.html'>Hierarchical Routemaps</a></li>
+ <li><a href='https://lists.linuxfoundation.org/pipermail/lightning-dev/2019-April/001954.html'>Trampoline Delegation</a></li>
+</ul></p>
+<p>To be fair, primary cognition did not have a few of the
+topics Rene listed in high-priority reasoning memory;
+routefinding is vast enough that significant amounts of
+thought can be put into it.</p>
+<p>Pathfinding and routing, I predict, would be the next big
+scaling debate, possibly overshadowing discussions on channel
+factories.</p>
+<p>Finally: all multipath (MPP / Bass Amplifier, OG AMP, High /
+Discrete Log AMP) is overrated.
+JIT Routing is superior and should be focused on more by
+most people, because multipath heuristics are not
+well-studied: there is no decent decision tree for when
+to split, how much to split, how to retry paths that failed
+at a particular amount but might succeed at lower amounts,
+and so on.
+Much of the multipath development would require experimentation
+in various splitting heuristics.
+Of note is that JIT Routing is a misnomer: it should be
+JIT Rebalancing.
+Nothing in JIT Routing prevents it from being used by the
+<em>source</em> of the payment, rather than just some forwarding
+node, as it was originally presented.</p>
+<h2>A Future of Lightning Network: Scaling Up Pathfinding</h2>
+<p>My talk: <a href='2019-10-18/presentation.odp'>slides in Open Document Format</a>.
+The animations are vital to the talk and you may become
+confused if you read through it rather than run it as a
+presentation.</p>
+<p>I would like to remark that I find it peculiar that the
+presentation system did not support Open Document Format.
+Instead, I was forced to convert the presentation to a
+closed-source format, and the conversion process lost some
+vital animations that were needed to fully understand Path
+Splicing (a.k.a.  <code>permuteroute</code>).
+One wonders why a presentation system supposedly to be used
+in a conference where the most important software implementations
+are open-source would want to even touch a closed format.
+It might have been barely acceptable if they preferred a
+closed format and accepted Open Document Format, and acceptable
+if they preferred an open format but also supported widely-used
+closed formats (probably by running closed-source software in a
+well-caged environment),
+but it is beyond the pale to outright reject the open format
+and compel the conversion to a closed format.
+I (and possibly others) cannot use any close-sourced
+presentation software, thus we can only safely use an
+open format, and risk loss of data when converting to a
+closed format using open-source software (due to lack of
+any decent documentation regarding the true format of all
+closed formats; open-source software depends on the
+reverse-engineering of closed formats in order to support
+them, barely).</p>
+<p>In any case my talk was extremely long (exceeding 30
+minutes), yet did not complete.
+In particular, I mostly skipped over the Nodelets topic,
+however
+<a href='https://lists.linuxfoundation.org/pipermail/lightning-dev/2019-October/002236.html'>I have a post on the mailing list about it</a>.</p>
+<h2><code>SIGHASH_NOINPUT</code> Concealed Tagging</h2>
+<p>After my talk, Jonas Nick asked me about why I
+was so strongly against revealed output tagging to
+enable <code>SIGHASH_NOINPUT</code>.
+Unfortunately at the time primary cognition was
+still performing cognitive clean-ups / garbage
+collection due to the high cognitive load of
+performing my talk remotely via human-interface
+agent, and thus primary cognition was not operating at
+full capacity.
+Hopefully the below will serve as a better argument
+against revealed output tagging (and thus for
+concealed output tagging).</p>
+<p>One argument Jonas gave was that it would be
+possible to hide a revealed output tagging in a
+transaction that spent from an ordinary MuSig
+output to an output with revealed output tagging
+support for <code>SIGHASH_NOINPUT</code>.
+The output tagging would not get revealed except
+for an uncooperative completion of a protocol,
+which would make obvious the use of a special
+protocol anyway (whether Decker-Russell-Osuntokun
+or otherwise).</p>
+<p>As it happens,
+<a href='https://lists.linuxfoundation.org/pipermail/bitcoin-dev/2018-February/015703.html'>I
+also gave this same argument long ago</a>, with a minor
+difference: I was arguing <em>against the entirety of Taproot</em>.</p>
+<p>The addition of that one transaction (converting from an
+ordinary n-of-n MuSig output to some special output indicating
+protocol-specific requirements) in the case of uncooperative
+enforcement of protocol-required restrictions is acceptable,
+according to this argument.
+Or is it?</p>
+<p>If it is acceptable to add this converter transaction
+(which is only revealed in the uncooperative case anyway,
+and remins hidden in the cooperative case),
+then why do we have Taproot at all?
+If it is unacceptable (and thus an argument to add Taproot
+to Bitcoin), then why do we force <code>SIGHASH_NOINPUT</code>,
+and only <code>SIGHASH_NOINPUT</code>, to accept it?</p>
+<p>Perhaps it can be counter-argued that
+<code>SIGHASH_NOINPUT</code> is far too powerful, more
+powerful than mere SCRIPT, thus must have additional
+restrictions.
+Yet the fact that a <code>SIGHASH_NOINPUT</code> with
+concealed output tagging would require that the output
+be tagged specially, except with the tag hidden and only
+revealed in the case of uncooperative completion of a
+protocol, should be enough of a restriction.
+Any controller(s) of such an output should be immediately
+aware of the fact that signatures for similarly-constrained
+outputs could be replayed.</p>
+<p>There is an argument that an exchange might become
+liable in case a user provides an output with a
+concealed <code>SIGHASH_NOINPUT</code>-allowing tag,
+but the user could also provide a completely
+incorrect address that is not the intended recipient,
+or an incorrect value that is not accepted by a
+third-party merchant: is the exchange liable for such
+operator mistakes?
+I would argue that users manually playing with
+addresses they ostensibly control but happen to have
+concealed <code>SIGHASH_NOINPUT</code> tagging,
+would be a similar operator error waiting to
+happen.</p>
+
+</div>
+
+<div class=footer>
+<p>&copy; 2019 ZmnSCPxj.  Released under CC-BY.</p>
+<iframe src='../donation.html' frameborder=0 width='100%' />
+</div>
+
+</body>
+</html>
