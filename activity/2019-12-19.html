@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang=en>
+<head>
+<meta charset=utf-8>
+<title>2019-12-19 Weekly Log</title>
+</head>
+<body>
+
+<div class=header>
+<p><a href='../index.html'>ZmnSCPxj</a> &raquo; <a href='index.html'>Activity</a> &raquo; 2019-12-19 Weekly Log</p>
+</div>
+
+<div class=content>
+<h1>2019-12-12 to 2019-12-19</h1>
+<p>This is a weekly log of my activity, as agreed with Steve Lee.</p>
+<p>This is somewhat freeform, perhaps I will organize somewhat at some
+point in the future.</p>
+
+<h2>Grant Announcement</h2>
+<p><a href='https://twitter.com/sqcrypto/status/1204815615678177280'>Grant
+announcement last week</a> had a number of well-wishers congratuliating
+me, so let me again thank them and Square Crypto and Steve Lee.
+In addition, some people started asking some questions regarding
+various technical topics as well.
+I replied to a number of them, but such questions have since tapered off.</p>
+
+<h2>Bank Troubles</h2>
+<p>Part of the grant funds is allocated for purchasing hardware on
+which I can <em>finally</em> run a Bitcoin and Lightning node.
+Purchasing that hardware requires some cross-country monetary transfer.</p>
+<p>As it happens, there seem to be Troubles With the Banking System
+occurring in the locale my selected human puppet resides,
+which make it difficult to actually perform the monetary transfer,
+referring to such things as the Anti-Money Laundering Association
+being strict.
+At least part of my time was wasted in micromanaging the human puppet
+around the mess involved here.</p>
+<p>Of course, Bitcoin Fixes This (and the merchant I am purchasing from
+has offerred to use Bitcoin),
+but this is a nice experience to show This is Why We Bitcoin.</p>
+<p>Previously when I purchased hardware of a different type,
+I used Bitcoin, and had a straightforward paying experience,
+so it looks like I will have to arrange a Bitcoin payment method for
+this purchase as well.</p>
+
+<h2>Rust Studying</h2>
+<p>I need to study Rust so I can start being more useful with the
+<a href='https://github.com/defiads/defiads'>defiads</a> and
+<a href='https://github.com/rust-bitcoin/rust-lightning'>rust-lightning</a>
+projects.</p>
+<p>I am currently going through
+<a href='https://doc.rust-lang.org/book/'>the Rust Programming Language
+book</a>.
+Hopefully, I will be able to usefully program in Rust sometime soon.</p>
+<p>A note is that Rust has apparently changed rather quickly (which I
+suppose is expected for a new language with significant work behind
+it), and that Rust packages on distributions that have a slow update
+stream are much too old for the tutorial, thus I installed Rust
+&ldquo;directly&rdquo; from their site rather than from the
+distribution.</p>
+
+<h2>Path Privacy on Lightning</h2>
+<p>In <a href='https://stephanlivera.com/episode/134/'>SLP134</a> Rusty
+mentions in passing regarding a &ldquo;random walk&rdquo; to improve
+path privacy on Lightning.
+Further, 1 or more other individuals have suggested that I focus on
+path privacy rather than pathfinding algorithm speedups.</p>
+<p>I would like to point out that C-Lightning
+already implemented route randomization almost 2 years ago,
+in two
+<a href='https://github.com/ElementsProject/lightning/commit/aff52ce5a885046ba16b1b068347c463c7b3c899'>different</a>
+<a href='https://github.com/ElementsProject/lightning/commit/61d0b50c5427f16a52f70ae0ae41f6b83fa8f555'>commits</a>, care of
+yours truly.
+Thus, C-Lightning already uses a sort of random walk, though
+the details of the algorithm currently implemented is different
+from what Rusty is thinking of (as described to me directly in a
+private email).</p>
+<p>Or rather C-Lightning <code>pay</code> <em>used</em> to use a sort of
+random walk.
+<a href='https://github.com/ElementsProject/lightning/commit/0a8b4f89356e370edd39cb523e5d62f21e63c744'>Early
+in 2019</a> the <code>pay</code> command was moved to a plugin.
+The plugin was a complete rewrite of the <code>pay</code> command
+implementation I did, and it <em>severely weakens</em> the random walk
+that I implemented before &mdash; it always uses a fixed 5% for the fuzz.
+This is not a very efective fuzzing (it does not fuzz by much, and
+also is vulnerable to a random fuzz accidentally giving a too-expensive
+path, making payment fail even if some alternate path existed with
+cost below <code>maxfeepercent</code>).
+For reference, the original implementation for route randomization
+started at 75% for the fuzz, then slowly reduced it in case
+returned routes were too expensive.</p>
+<p>The rewrite also removed value randomization, though nobody seems to
+be interested in that anyway.</p>
+<p>The original intent was that <code>maxfeepercent</code> would limit
+how much C-Lightning would devote to fees for the path, including that
+caused by route randomization.
+So this would be used as a proxy by the user for how much they would be
+willing to pay for improved payment privacy.</p>
+<p>I think the next step would be for me to rewrite this implementation
+in the new <code>pay</code> plugin, then later we can evaluate the
+Rusty algorithm (which I would like to note has some similiarities to
+<code>getroutequick</code>, so I might as well fold it into that
+algorithm).
+I think it should start with a fuzz of 99% rather than 75%,
+and it seems to me that a similar parameter could be provided by the
+Rusty algorithm, so the same logic in <code>pay</code> should still
+work when we switch to <code>getrandomwalk</code>
+(or probably <code>getroutequick</code>
+since it can be subsumed into that algorithm).</p>
+<p>Of note is that we should special-case payments to direct peers.
+Rather than randomizing those paths, we should just always use the direct
+path as long as it has the required capacity.
+This is because by using the direct channel, <em>we never tell anybody
+else about the payment</em>, it is only between payer and payee,
+this is a massive privacy boost.
+The payee needs to know the payment anyway, and probably knows a lot
+more information (where the payer lives, for example) about the payer
+anyway.
+This special case should only be if we are not using a routehint,
+i.e. the payee itself should not be using an unpublished channel to
+some tr*sted server, our own node must have a direct channel to the
+final payee.</p>
+<h3>Against Unpublished Channels</h3>
+<p>A common recommendation nowadays is to prefer using an unpublished
+channel.
+I have pointed out
+<a href='https://lists.linuxfoundation.org/pipermail/lightning-dev/2019-October/002241.html'>elsewhere</a>
+that unpublished channels do <strong><em>not</em></strong>
+give improved privacy (and the common appellation 
+&ldquo;private channel&rdquo; is a very bad misnomer).</p>
+<p>Indeed, <a href='https://arxiv.org/pdf/1909.02717'>this paper</a>
+strongly recommends the splitting of nodes into two classes,
+users and servers, and recommends the use of unpublished channels
+for users.
+This is very bad for privacy and is not in fact a privacy boost
+(though the other insights of the paper are quite useful; it simply
+mis-analyzes this case).</p>
+<p>The proposed split between users and servers mean that the server
+directly connected to a user knows <em>definitely and exactly</em>
+when that user receives and sends every payment.
+Granted, other users and servers have far less information about
+the ultimate sender/receiver of the payment, since those nodes are
+no longer visible to them.
+But the server that has that user knows every use of that channel,
+and that is a very precise information.</p>
+<p>Such servers which interface with large numbers of
+unpublished-channel-only users become targets.
+In fact, this misdesign works directly against the
+<a href='https://github.com/libbitcoin/libbitcoin-system/wiki/Risk-Sharing-Principle'>Risk-Sharing Principle</a>.
+Now only those servers have to be hacked, and the hackers can now
+get accurate and precise information about when this user received and
+sent a payment, and how much.
+Thus risk is much higher for such servers than for other parts of the
+network.</p>
+<p>If instead there were no separate classes of servers and users, and
+all channels were published, then risk is shared across all nodes.
+No particular nodes have accurate views of when particular nodes sent
+or received payments, and a hacker would need to aggregate information
+from almost all nodes in order to get such accurate views.
+The entire intent of Risk-Sharing Principle is that it is easier to
+make the information you want to protect be spread out across
+multiple nodes who each accept some low level of risk, than to
+paint targets on a select few users who protect the privacy of
+everyone else.</p>
+<p>The separation of server and user classes is intended to provide
+endpoint uncertainty, since the users are not publicly known
+(though they are intimiately known by the servers directly connected
+to them).
+A better way to provide endpoint uncertainty is the Shadow Routes
+feature that C-Lightning currently already has.
+Briefly, Shadow Routes simply mean that C-Lightning virtually appends
+a short route of 0 to 3 nodes <em>after</em> the payee, and extends
+the CLTV timelock of all nodes in the actual route by that amount.
+The Shadow Route is never actually added to the actual route, only their
+CLTV-deltas are, the route still terminates at the payee.
+The CLTV timelock is currently a strong indication to each forwarding
+node about how close the ultimate payee is to that forwarding node,
+thus the presence of a Shadow Route improves uncertainty of
+the payee end.</p>
+<p>Uncertainty of the payer end is not needed since onion route entries
+never refer to the payer, only to the payee, and thus forwarding nodes
+already currently receive no information (i.e. payers already currently
+have information-theoretic privacy).
+Thus, the separation of servers and users, which implies that servers
+now know exactly when a user directly connected to them makes an outgoing
+payment (i.e. the user is the payer is now known, because use of that
+unpublished channel cannot have been initiated by anybody else) is a
+<strong>strict</strong> privacy loss relative to the situation
+where all channels are published.</p>
+<p>Unpublished channels delenda est!</p>
+<h3>Path Privacy Requires Pathfinding Optimization</h3>
+<p>A reason for encouraging unpublished channels is that reducing the
+number of nodes in the routemap leads to real improvements in the
+speed of pathfinding.</p>
+<p>Indeed, the current abysmal pathfinding speeds has, to my mind,
+lead to the following privacy-losing optimization attempts:</p>
+<p><ul>
+<li><p>The encouragement of unpublished channels and the visible
+separation between servers and users, with servers knowing exactly
+when each direct user is the payer or payee of a transaction,
+leading to Risk-Sharing Principle violation.</p></li>
+<li><p>Restricting the in-memory routemap to fewer well-connected
+nodes, meaning that nearly all payments pass through those few nodes
+and thus giving them a large amount of data about transactions.</p></li>
+<li><p>Caching of routes previously queried from the (slow) pathfinder,
+thus giving information about every payment to the same payee to the
+nodes in that route.</p></li>
+</ul></p>
+<p>On the other hand, the other pathfinding algorithm improvements I
+have proposed &mdash;
+<code>getroutequick</code>, <code>permuteroute</code> &mdash;
+are not as privacy-losing.</p>
+<p><ul>
+<li><p><code>getroutequick</code> gets its speedup from precomputing a
+heuristic from the network connectivity graph (by periodically running
+a Dijkstra algorithm).
+The same Route Randomization already implemented in C-Lightning can be
+added onto <code>getroutequick</code> and I am quite certain that the
+Rusty random-walk algorithm can be made identical to the
+<code>getroutequick</code> algorithm by implementing the same fuzzing as
+Route Randomization.</p></li>
+<li><p><code>permuteroute</code> reuses the same nodes as before
+(at least the same prefix that succeeded before a channel later succeeds),
+but that is in fact a good thing: we are not telling a <em>new</em> set
+of nodes about this payment, we are re-telling the same nodes about the
+same payment attempt.
+This is not the same as the caching I derided earlier: the nodes are
+informed of the same payment, thus get no new information (they already
+got the information earlier),
+whereas caching means the same nodes are informed of
+multiple different payments to the same payee.</p></li>
+</ul></p>
+<p>The known slowness of pathfinding lead to previous pathfinding
+optimizations, most notably the encouragement of unpublished channels,
+that give bad privacy.</p>
+
+</div>
+
+<div class=footer>
+<p>&copy; 2019 ZmnSCPxj.  Released under CC-BY.</p>
+<iframe src='../donation.html' frameborder=0 width='100%' />
+</div>
+
+</body>
+</html>
