@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang=en>
+<head>
+<meta charset=utf-8>
+<title>2019-12-26 Weekly Log</title>
+</head>
+<body>
+
+<div class=header>
+<p><a href='../index.html'>ZmnSCPxj</a> &raquo; <a href='index.html'>Activity</a> &raquo; 2019-12-26 Weekly Log</p>
+</div>
+
+<div class=content>
+<h1>2019-12-20 to 2019-12-26</h1>
+<p>Unfortunately, relatively low activity this week.
+It seems likely to also have low activity for a few more weeks due to
+various pre-scheduled circumstances.</p>
+
+<h2>Path Privacy on Lightning</h2>
+<p>As mentioned in previous log, this is something I have taken an
+interest in.
+I have created a lengthy
+<a href='https://lists.linuxfoundation.org/pipermail/lightning-dev/2019-December/002408.html'>article
+on lightning-dev regarding this topic</a>.</p>
+<p>This includes a number of various possible improvements that might
+help payment privacy on Lightning.</p>
+<p>Another thing I am working on is returning the previous behavior
+of <code>pay</code> on C-Lightning, where it started with a large
+route randomization <code>fuzzpercent</code>, then lowers it if the
+<code>maxfeepercent</code> or <code>maxdelay</code> have been violated.
+While I have coded this already, creating a test for this has
+been delayed somewhat, due to the next item.</p>
+
+<h2>BOLT Regression on <code>final_expiry_too_soon</code></h2>
+<p>A <a href='https://github.com/lightningnetwork/lightning-rfc/commit/6729755f0c0228df0686176e99032fb368ca056a'>recent
+change in BOLT 4</a> merged the <code>final_expiry_too_soon</code>
+failure code into the <code>incorrect_or_unknown_payment_details</code>
+failure code.</p>
+<p>The problem is that <code>final_expiry_too_soon</code> did not have
+the <code>PERM</code> bit set.
+This means it is not a permanent error, which makes sense.
+The most usual cause of this error is the following sequence of
+events:</p>
+<p><ol>
+<li><p>You send out a multi-hop payment.</p></li>
+<li><p>Before the payment reaches the final destination,
+miners are able to find a block.</p></li>
+<li><p>The block propagates over the network faster than your payment
+does, because of Bitcoin FIBRE, or because some of the forwarding
+nodes are flaky.</p></li>
+<li><p>The payment reaches the final destination, which now has fewer
+blocks to claim its payment.</p></li>
+</ol></p>
+<p>The above sequence of events is very unlikely, but is still a
+possible edge case.</p>
+<p>Before, this was handled &ldquo;normally&rdquo; by C-Lightning
+(and presumably other implementations) because
+<code>final_expiry_too_soon</code> did not have the <code>PERM</code>
+bit set.
+Because that bit is not set, it was not considered a permanent error,
+and thus the <code>pay</code> implementation would retry in that
+situation.</p>
+<p>However, the linked commit in lightning-rfc requires that we now
+use <code>incorrect_or_unknown_payment_details</code> to report this
+failure case.
+<code>incorrect_or_unknown_payment_details</code> has the
+<code>PERM</code> bit set, meaning it is now classified as a permanent
+failure.
+Because this failure is now a permanent failure, the
+<code>pay</code> implementation will not retry &mdash; after all,
+the failure is marked as permanent!
+But in fact this sub-case is actually a transient problem that
+should eventually get fixed once the payer node catches up to
+the latest blockchain state.
+The Real Bug is that we are now reporting a transient problem
+using a failure code that has the <code>PERM</code> bit set,
+which is inaccurate (because that should only be set for permanent
+errors).
+Of course, having this as a separate failure code lead to
+privacy leaks, so we are forced to accept this now-permanent
+failure code for a transient problem.</p>
+<p>Fortuitously Nicolas Dorier had a test case that tickled this
+edge case, and reported it in
+<a href='https://github.com/ElementsProject/lightning/issues/3367'>C-Lighntning#3367</a>.</p>
+<p>The solution is to special-case this failure mode.
+If <code>incorrect_or_final_payment_details</code> is the failure
+code returned, we should try to check if the returned <code>height</code>
+is higher than the height <em>before</em> we sent the payment.
+The returned height is the block height that the destination knows.
+If the destination has a higher block height than what the block
+height was <em>before</em> we sent the payment, we should instead
+consider it as this previously-non-permanent failure.</p>
+
+<h2>Rust Studying</h2>
+<p>Unfortunately, no activity here at all.</p>
+
+</div>
+
+<div class=footer>
+<p>&copy; 2019 ZmnSCPxj.  Released under CC-BY.</p>
+<iframe src='../donation.html' frameborder=0 width='100%' />
+</div>
+
+</body>
+</html>
