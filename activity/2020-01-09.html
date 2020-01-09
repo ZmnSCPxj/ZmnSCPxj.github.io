@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang=en>
+<head>
+<meta charset=utf-8>
+<title>2020-01-09 Weekly Log</title>
+</head>
+<body>
+
+<div class=header>
+<p><a href='../index.html'>ZmnSCPxj</a> &raquo; <a href='index.html'>Activity</a> &raquo; 2020-01-09 Weekly Log</p>
+</div>
+
+<div class=content>
+<h1>2019-12-27 to 2020-01-09</h1>
+<p>Not actually a <em>weekly</em> log this time.
+The week from 2019-12-27 to 2020-01-02 had no useful activity, thus
+did not bother to log.
+Most activity below is for the week 2020-01-03 to 2020-01-09.</p>
+
+<h2>New Hardware Arrival</h2>
+<p>One of the new hardware I purchased with Square Crypto provided funds
+arrived in this week.
+So I have started setting it up for my development environment,
+e.g. installing <code>vim</code>, <code>screen</code>, and other essentials.</p>
+<p>Other pieces of new hardware will be coming soon, this is the first of
+the new hardware, which is significant as now I am running a bonafide archiving
+Bitcoin full node on this new hardware!
+Once I can allocate a few coins I will also start running a C-Lightning node.</p>
+<p>Steve suggested boosting <code>dbcache</code>, which seems to have helped,
+and now I am saturating the download limit imposed by the ISP, incidentally
+the ISP contract is again paid for with Square Crypto provided funds.
+Hopefully initial block download will complete by the time I publish this
+log.</p>
+<p>The new hardware is a definite step up in speed from what I have been
+using for development.
+Boot up takes less than 5 seconds from entry of disk encryption pasword,
+shut down takes 2 seconds or less.
+Starting of applications and so on is almost instant.
+I am now able to run <code>make check</code> on
+<code>ElementsProject/lightning</code>
+(I had opted for a long-term support OS for my previous dev env,
+unfortunately it meant most tools were older than the test suite of
+C-Lightning wants, in any case Travis is still quite good and is still
+faster than even this new hardware).</p>
+<p>The new hardware is not configured to support proper hibernation
+out-of-the-box, but hopefully I just need to do some OS excision of
+some sort to make that work.
+It forgets the keyboard exists when getting out of sleep (thus the system
+is rendered useless until power-cycled), but I do not use sleep anyway and
+strongly prefer hibernate, so will focus on that instead.</p>
+<p>Of course this is new hardware to live in, so of course a good part
+of my time was spent playing with it and tweaking it, sorry, will
+actually continue developing more Bitcoin software soon as well, just
+let me enjoy this new hardware a little.</p>
+<p>Small amount of time was also spent tracking incoming shipment
+for this particular piece of hardware as well as the status of the
+other incoming new hardware.</p>
+<p>My intent is that I will copy the blocks and chainstate from this
+hardware to the other incoming hardware, and use that as the main
+server; in effect, this just lets me start with a full node on the
+other incoming new hardware faster.
+I am not quite certain what to do with the node on this hardware
+once I have switched the full node over to the other new hardwaer
+&mdash; there is no &ldquo;real&rdquo; point to running more than
+one node, after all
+&mdash; perhaps I will prune the node on this current new hardware,
+or delete it completely, or just keep it as an extra archive copy.</p>
+
+<h2>Government Papers Handling</h2>
+<p>Various necessary paperwork as needed by our governmental overlords.
+The government demands its pound of flesh, and since I started receiving
+Square Crypto funds in the previous year, the necessary paperwork and
+the tribute<!-- taxation is theft! --> to the government that
+protects<!-- ha, ha --> my rights needs
+to be handled after the end of that year (i.e. the start of this year).
+Some hours were spent in this and related activity.
+Hopefully as I learn more about how this all works it will take less time
+in the future.</p>
+
+<h2>Guidance for BOLT Spec and Other Topics</h2>
+<p>0 or more people have been asking guidance from me regarding parts of the
+BOLT spec, and the Lightning Poon-Dryja mechanism as well as those
+details of the Bitcoin that materially affect how Lightning is implemented.
+The BOLT spec is not a good place to start learning about Lightning, but it
+remains the most comprehensive and detailed description of what Lightning
+currently is.
+A good part of my time that was not visible as activity on C-Lightning or
+the lightning-dev mailing list was spent here.</p>
+<p>0 or more people also asked about some interesting cryptocurrency topics,
+mostly not likely to be implemented in Bitcoin.
+Some of these were similar to some kind of amalgam between sidechains and
+offchain updateable cryptocurrency systems (i.e. &ldquo;channels&rdquo;),
+where sidechain operators/functionaries/miners/whatever-they-are have some
+stake that could potentially get slashed if they misbehave.
+(the stake, if my understanding is correct, would even be locked in the
+mainchain, and is thus similar to my old mainstake idea).</p>
+<p>Personally, the reason I am primarily developing Lightning rather than
+sidechains is that, after some reflection, I realized that sidechains are
+just putting more blockchains in existence, and blockchains are not efficient
+at transferring funds;
+the reason we tolerate <em>one</em> blockchain is not because of its
+efficiency of fund transfer (it is not efficient at this task), but because
+of the permissionless censorship-resistance, as well as the ability to
+enforce a fixed supply schedule.
+One can observe that my oldest writings on this site are primarily related
+to sidechains, and that those have not been updated at all, and that I am
+now far more prolific in Lightning development.
+Lightning, I believe, is a powerful layering of tradeoffs: the Lightning
+layer provides efficient fund transfer, and because we can always drop
+onchain rather quickly, we can approach (though not quite meet) the
+security and censorship-resistance of the blockchain layer.</p>
+
+<h2>BOLT Regression on <code>final_expiry_too_soon</code></h2>
+<p>As mentioned in the <a href='2019-12-26.htl'>previous log</a>.</p>
+<p>The code for this was already complete, and Nicolas Dorier has already
+confirmed the fix was working for his tests (and added the change to his
+distribution of C-Lightning 0.8.0 embedded in BtcPayServer).
+However, we also needed tests in the C-Lightning test suite.
+The ones I was writing were not triggering the case as often as I would
+have liked, but anyway Christian Decker pointed that our test
+harness actually allows the <code>bitcoind</code> model to stop informing
+new blocks to the C-Lightning after test, which allows us to trigger
+this situation reliably.
+With this, pull request
+<a href='https://github.com/ElementsProject/lightning/pull/3376'>#3376</a>
+is now a complete pull request.</p>
+<p>It is still not merged, as properly it needs an ACK from someone who
+we know has been staring at C-Lightning code for a good while.
+I would also be more comfortable if another C-Lightning core developer
+were to actually merge it in as well, as the code addition is not trivial.</p>
+<p>In any case, I always strive to at least fix a bug before adding a few
+features.
+As we all know, adding a feature always risks introducing a bug, one only
+needs to remember SegWit2X
+(&ldquo;not just twice the blocksize but twice the softforks!&rdquo;
+good thing they thought twice about pushing it).
+Getting into this practice of &ldquo;fix a bug before you add a feature&rdquo;
+lets us at least mitigate the above effect.</p>
+
+<h2>Multiple Channel Opens in One Transaction</h2>
+<p>An old feature requested in
+<a href='https://github.com/ElementsProject/lightning/issues/1936'>#1936</a>
+by my good friend Rene Pickhardt.
+This is quite possible now to do &ldquo;manually&rdquo;, with the
+introduction of the <code>fundchannel_start</code>, <code>fundchannel_complete</code>,
+and <code>fundchannel_cancel</code> commands, as well as the split of withdrawal
+into <code>txprepare</code> and <code>txsend</code>, but of course a unified
+command to do this should really be provided out-of-the-box by C-Lightning.</p>
+<p>Now, because such a <code>multifundchannel</code> command would be communicating
+with multiple separate peers, it would be quite a good bit better to start those
+interactions simultaneously for all the peers to be channeled to.
+The core C-Lightning <code>lightningd</code> daemon can deal with this 100% fine,
+since we launch a new process for every peer, but the plugin library for C
+is not able to have a single plugin-provided command launch multiple commands to
+the C-Lightning daemon in parallel, only in series.</p>
+<p>(the plugin library can handle multiple parallel instances of the same plugin-provided
+command, but each such command can only have one C-Lightning command in-flight at a time.)</p>
+<p>Thus I propose in
+<a href='https://github.com/ElementsProject/lightning/issues/3401'>#3401</a>
+to add the capability to have a plugin-provided command launch multiple
+&ldquo;threads&rdquo; that can independently block on a C-Lightning command.
+The plugin library already has this capability &mdash; multiple instances of a
+plugin-provided command can run concurrently already &mdash; but it is not
+well-exposed.
+These are not &ldquo;real&rdquo; threads as well, they are more similar to how
+Hugs98 implements multiple Haskell <code>IO</code> threads (i.e. sometimes called
+&ldquo;green threads&rdquo; as the OS has no knowledge of these and we just
+effectively execute in continuation-passing style to allow arbitrary scheduling
+of the rest of the computation).</p>
+<p>This will not only benefit <code>multifundchannel</code> and allow us to
+initiate parts of the channel-opening protocol to multiple peers concurrently,
+in the future it would likely get easier to implement multipath payments by
+having multiple try-and-try-again part-payment &ldquo;threads&rdquo; running,
+then possibly giving up and then have a parent control &ldquo;thread&rdquo; decide
+to split the payment differently.</p>
+<p>In any case this is what I am currently working on, hopefully it will end up
+being a decent interface.</p>
+
+<h2>Lightning Path Privacy</h2>
+<p>As well, I am still thinking of path privacy on Lightning.</p>
+<p>A thought I have been having is that, if the surveillor controls multiple
+nodes on the network, <em>and</em> we do not have path decorrelation yet,
+then if a payment passes through more than one surveillor node, then the analysis
+needed by the surveillor is vastly sinplified.</p>
+<p>In particular, if the surveillor controls nodes S1 and S2, and you made a
+payment A -&gt; B -&gt; S1 -&gt; C -&gt; D -&gt; E -&gt; S2 -&gt; F, then the
+surveillor only needs to consider the incoming path B -&gt; S1 and the
+outgoing path S2 -&gt; F to guess the payer and payee.
+No matter how long the path is between S1 and S2, the surveillor will not have
+any degradation in the information it can extract.</p>
+<p>This is relevant since some of the thinking around path privacy has been
+about increasing path length in order to spread risk and make it harder for
+surveillors to utilize the shortest-path heuristic.</p>
+<p>I find I am somewhat ambivalent about this technique of &ldquo;just always
+increase the path length&rdquo;.
+The intuition is that the fewer people you tell about your payment, the more
+private you would be.
+Indeed, if you had a direct channel between payer and payee, and used only
+that single hop for all payments (without just increasing the path length)
+you have maximal privacy since nobody else can know about the state of your
+channel and about any payments you make through it.
+Thus we should avoid route randomization if there is a viable direct single
+channel from payer to payee.
+But having direct channels with every payee you want to pay is not scalable,
+so we really do need intermediaries.</p>
+<p>Increasing path length increases the number of people you tell about
+your payment, which increases the chances that you will inadvertently
+tell more than one node that is controlled by a single surveillor.
+And if you tell two nodes from a single surveillor about your payment,
+they can eliminate every node in-between them from analysis, meaning
+any extra path length between the two cooperating
+surveillors is &ldquo;wasted&rdquo;, you are paying higher fees without
+increasing your privacy against that surveillor.</p>
+<p>Increasing path length also reduces the reliability of your payments
+and increases the chance that a node will forward, then drop from the
+network before the payment claim can be returned to it, leaving your
+payment stuck, potentially until the timelock on your HTLC.
+Finally, increasing path length tends to increase the timelock at your
+outgoing HTLC, meaning that the worst-case for payment stuck increases.</p>
+<p>I take it as a given that any surveillor would run multiple
+Lightning Network nodes.
+We already know that surveillors run multiple Bitcoin full nodes to
+try and triangulate what nodes source what transactions;
+I fully expect that the same will be true for Lightning.
+The Lightning case <em>is</em> mitigated somewhat by the fact that
+running a Lightning Network node requires allocating some funds,
+but that mitigation is counter-mitigated by the observation that
+the more funds you allocate to a Lightning Network node, the more
+fees you earn from forwarding (in general), thus does not impose an
+opportunity cost.</p>
+<p>Of course, the above is only relevant <em>if</em> payment
+decorrelation is not yet prevalent on the network.</p>
+<hr />
+<p>In a future <em>with</em> payment decorrelation, of course,
+surveillors running multiple nodes will not be able to easily
+determine if two forwards on two different nodes they control
+belong to the same payment attempt.
+In that case, they can only continue to use the shortest-path
+heuristic to determine if the two forwards belong to the same
+single payment.
+This implies that, in a payment decorrelation future, adding
+extra length to your path that happens to lie between two
+surveilling nodes is now beneficial, as this frustrates the
+shortest-path heuristic and prevents the surveilling nodes
+from realizing that two forward attempts are in fact belonging
+to the same single payment.</p>
+<p>So does this vindicate &ldquo;just always increase the path
+length&rdquo;?
+Not quite, I believe.</p>
+<p>The only thing that the surveillor sees is actually just
+two forwards, B -&gt; S1 -&gt; C and E -&gt; S2 -&gt; F.
+To apply the shortest-path heuristic, the surveillor will
+check if the outgoing amount and CLTV S1 -&gt; C, minus the
+incoming amount and CLTV E -&gt; S2, is what would be
+expected if the shortest path between S1 and S2 were taken.
+Remember, the onion format is still unbroken, so S1 cannot
+in fact see the exact path it is going into after its hop.
+If the change in amount and CLTV matches what would happen
+if the shortest path between S1 and S2 had been taken,
+then the surveillor can determine that both forwards belong
+to the same payment.</p>
+<p>Thus, if the path S1 -&gt; C -&gt; D -&gt; E -&gt; S2
+were <em>not</em> the shortest path between S1 and S2, then
+the surveillor might be fooled into thinking that the two
+forwards might actually be from two unrelated payments.</p>
+<p>(note that amount correlation and timing correlation still
+leaks even if you do not take the shortest path, so the
+surveillor might still suspect that those forwards still
+belong to the same payment; baby steps, but at least some
+progress)</p.
+<p>But given that all the surveillor sees is just its own
+forwards, this gives us an opportunity to fool the surveillor
+without <em>actually</em> increasing path length.
+We only need to extend shadow routing, which increases the
+amount and CLTV at the end of the route, to possibly working
+on intermediate nodes as well.</p>
+<p>More concretely: suppose the shortest path between S1 and
+S2 is actually S1 -&gt; C -&gt; E -&gt; S2 (i.e. the previous
+example path was not the shortest path).
+If we <em>overpay</em> the fees and CLTV at C, such that it
+<em>looks like</em> the path went through the &gt;extra&lt;
+node D, but still use the shortest path S1 -&gt; C -&gt; E
+-&gt; S2,
+then what S1 sees at its outgoing HTLC is still a non-shortest
+path!</p>
+<p>That is, by overpaying hop nodes randomly, using the same
+shadow routing algorithm, we can &ldquo;virtually&rdquo;
+increase our path length without &ldquo;actually&rdquo;
+increasing our path length.
+This is an advantage since if we take the shortest path
+&ldquo;actually&rdquo;, we (1) reduce risk of payment
+failure (mo hops mo problems) and (2) reduce risk that
+we will inadvertently inform multiple surveillors of our
+payment.
+But surveillors cannot see the actual path, only infer
+it from the CLTV and amount deltas, so they see the
+length of the &ldquo;virtual&rdquo;</p>
+<p>Of course, having the shortest path length is still a
+risk, even if we virtually increase its apparent length;
+a sufficiently powerful surveillor might control all nodes
+on your path, in which case virtual increases in apparent
+length will automatically be seen and found.
+To get around the sufficiently powerful surveillor, you
+need to actually increase path length, not just virtually
+increase it, so that you now have a chance to have a node
+that is <em>not</em> controlled by the surveillor.
+But I suspect this is easily avoided by simply ensuring
+your path length is at least 3, and using the shortest
+path <em>actually</em> if the shortest path is 3 or more
+hops (and just using extended shadow routing to virtually
+extend it);
+I doubt a sufficiently powerful surveillor would dominate
+over the network that much (but I may be naive).</p>
+
+<h2>An MPP Splitting Proposal</h2>
+<p>Rene recently
+<a href='https://lists.linuxfoundation.org/pipermail/lightning-dev/2019-December/002406.html'>posted
+his research about a node balance measure</a>.
+Since my position is that a &ldquo;lazy&rdquo;, non-proactive
+rebalance (i.e. &ldquo;JIT Routing&rdquo;) is still better, I
+was not quite as excited about it myself.</p>
+<p>However, thinking further on the ramifications of JIT
+Routing led me to realize that, at any arbitrary time, a
+payer would likely be in an unbalanced position, at least by
+the measure that Rene proposes.
+Now, proactive balancing is basically the speculation that
+payments are equally likely to occur in all directions,
+then buying a position on the Lightning Network based on
+this assumption.
+I believe JIT Routing is superior in that it actually
+first waits for a signal that payments will be done in a
+particular direction before making such a purchase.</p>
+<p>But the &ldquo;equally likely&rdquo; assumption is
+actually sound!
+It reflects what we expect, that every customer will be
+the employee of some provider that has its own customers:
+the money just goes round and round as products are
+transformed and routed in the reverse direction.
+Thus, waiting until we encounter
+some other event &mdash; a forward (JIT Routing) or a payment
+&mdash; and <em>then</em> ride a rebalance on top of that,
+seems like a good idea.</p>
+<p>So I asked Rene on the mailinglist about using his
+measure to guide multipath payments, which excited him
+and made him produce some
+<a href='https://lists.linuxfoundation.org/pipermail/lightning-dev/2020-January/002418.html'>actual
+code to model this</a>.</p>
+<p>This is quite a good thing, as it removes an objection I
+have against multipath, specifically that there is no clear
+policy about how to split the payment.
+JIT Routing at least has a very clear policy on when it
+triggers: if you have a forward that you would fail because
+of insufficient funds, you do a rebalance.</p>
+<p>So it seems to me to be a good thing, though I still
+think JIT Routing is better than a proactive rebalancing.</p>
+<p>I observe as well that JIT Routing is not so different
+from making a payment, so it coudl use this same algorithm
+as well to guide where it gets its funds for rebalancing.</p>
+
+</div>
+
+<div class=footer>
+<p>&copy; 2020 ZmnSCPxj.  Released under CC-BY.</p>
+<iframe src='../donation.html' frameborder=0 width='100%' />
+</div>
+
+</body>
+</html>
