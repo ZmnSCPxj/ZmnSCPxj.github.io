@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang=en>
+<head>
+<meta charset=utf-8>
+<title>2020-01-16 Weekly Log</title>
+</head>
+<body>
+
+<div class=header>
+<p><a href='../index.html'>ZmnSCPxj</a> &raquo; <a href='index.html'>Activity</a> &raquo; 2020-01-16 Weekly Log</p>
+</div>
+
+<div class=content>
+<h1>2020-01-10 to 2020-01-16</h1>
+
+<h2>Mah Fullnode</h2>
+<p>Fullnode is up and running and is now also behind a Tor .onion address, and is not
+accessible over the open IPv4 or IPv6 networks.</p>
+<p>Setting up the Tor .onion address is easy, but <em>confirming</em> you are set up
+safely reachable behind the .onion is surprisingly difficult.
+In particular, <a href='https://bitnodes.earn.com'>bitnodes</a> does not reliably detect
+.onion nodes: it claims my .onion node is down.
+With some assistance from Matt Corallo, I determined that my .onion node is actually
+quite up and reachable.</p>
+<p>Since revealing your IP increases the probability of nasty people attacking you and
+your node, I believe that running over .onion only is a basic precaution that every
+fullnode operator must do.
+Setting up Bitcoin Core to run over Tor is easy and a lot of guides exist for that, but
+<em>checking</em> that you did it correctly is hard:
+as mentioned <a href='https://bitnodes.earn.com'>bitnodes</a> is not reliable when
+dealing with .onion-only fullnodes,
+and you might not get a lot of inbound connections until a good bit later, so
+you will be waiting a long time trying to catch an inbound connection on
+<code>getpeerinfo</code> just to assuage yourself
+that you have it set up correctly.
+So here is some other ways to confirm you have been set up:</p>
+<p><ul>
+  <li><p>Ask someone who is already running a fullnode over Tor to run
+         <code>addnode <em>your.onion:8333</em> onetry</code> in their Bitcoin.
+         If they can connect, then you have been successfully set up over that
+         .onion.
+         Obviously now they know the .onion address of your fullnode, so only do this
+         if you trust them not to attach your .onion address to your identity.</p></li>
+  <li><p>Check your own <code>getnetworkinfo</code>.
+         There will be a <code>localaddresses</code> field.
+         Make sure it contains only your own .onion (and not any IPv4 or IPv6 addresses).
+         If the <code>score</code> for your .onion is greater than 4,
+         it means at least one other node has connected to it at least once in the
+         past.
+         It will take a good bit for this to increment, but note that you might not
+         be looking at your computer at the exact moment that an inbound peer connects,
+         so this is a good approximation that at least one peer has managed to get in
+         touch with your fullnode while you were not watching.</p></li>
+</ul></p>
+<p>According to Matt .onion addresses are at a disadvantage, since nodes will generally
+avoid gossiping about remote peers that they have not actually tried to connect to,
+and obviously those nodes can only try .onion addresses if they have Tor installed, and
+not a lot of people actually install Tor.
+So .onion addresses will propagate over the network much more slowly than IPv4 or
+IPv6 addresses.
+In any case inbound connections <em>will</em> arrive eventually, just longer, and now
+that I have been running my fullnode continuously for about a week I have two inboud
+connections.</p>
+<p>As well, I have installed and running a JoinMarket maker for a few days already.
+No takers yet, sadly, probably I need to earn more money in other ways first
+before I can see some takers coming to me.
+JoinMarket maker supposedly only does outgoing connections, and the sample
+configuration file guides you on how to connect over Tor.
+Hopefully this means my maker is just out there waiting for somebody to take its
+offer, but so far profits have been 0.</p>
+<p>I also set up Electrum Personal Server for my hardware wallet, which gives me good
+privacy for my hardware wallet finally.
+Installing for my hardware wallet involved installing some drivers,
+and necessitated a reboot.
+I am still trying to figure out how to update the firmware without connecting to
+the manufacturer web-wallet though.</p>
+<p>Next step is to get some funds that I can put into a Lightning node
+and actually start running C-Lightning.</p>
+<p>I observe as well that the location I have installed my hardware suffers from
+power interruptions once every one or two weeks, so acquiring some kind of
+uninterruptible power supply may be a good idea.</p>
+
+<h2>Advice</h2>
+<p>As well, 0 or more people have been asking advice regarding topics related to
+Bitcoin, Lightning, consensus, scaling, and so on.
+Again, a good part of my time that cannot be seen as activity on-list or on-github
+is spent on such informal mentoring activities.</p>
+<p>At least one person in particular asked about thermodynamics-based consensus and
+how to easily explain it to e.g. elementary school level humans.
+I thereby came up with a <a href='2020-01-16/fable.html'>fable</a>.</p>
+
+<h2>Preparations for Bitcoin Core Dev and 2020</h2>
+<p>Steve Lee offerred to have Square Crypto sponsor a trip to the USA to
+attend Bitcoin Core Dev and Bitcoin 2020 conference.
+Thus, at least part of my time was spent studying the requirements to get my
+current meat puppet a visa to the USA.</p>
+<p>The USA has relatively draconian policies for granting visas,
+thus there is a chance that my current meat puppet will be unable to acquire one.
+However, I do intend to make a best-effort attempt to acquire a visa
+and attend these events.</p>
+
+<h2>Hardware Signers for Lightning</h2>
+<p>0 or more people have brought up hardware signers in various venues recently,
+so I decided to take some time to actually figure out how a hardware signers can work
+with Lightning, resulting in
+<a href='https://lists.linuxfoundation.org/pipermail/lightning-dev/2020-January/002425.html'>this
+spam article on lightning-dev</a>.</p>
+<p>The
+<a href='https://lists.linuxfoundation.org/pipermail/lightning-dev/2020-January/002427.html'>reply
+from Devrandom</a> is quite helpful for this topic as well,
+and is arguably more relevant,
+since Devrandom and Ken Sedgwick are both actively working on these.</p>
+
+<h2><code>multifundchannel</code> for C-Lightning</h2>
+<p>I.e.
+<a href='https://github.com/ElementsProject/lightning/issues/1936'>#1936</a>.</p>
+<p>I have implemented a &ldquo;spark&rdquo; system already to allow concurrent
+execution of commands from within a <code<libplugin</code>-based plugin.
+As well, I have implemented a &ldquo;step&rdquo; system to allow easily
+specifying tasks to be done in sequence for a command.</p>
+<p>You can view my
+<a href='https://github.com/ZmnSCPxj/lightning/tree/multifundchannel'>work-in-progress
+branch</a>,
+though if you are reading this log entry long after the date I post this log,
+note that I have a habit of deleting branches once their pull requests have been
+closed.</p>
+
+<h2>Tamas Blummer</h2>
+<p>Tamas Blummer died a few days ago.
+Though I have not worked closely with him for long,
+we did plan out part of
+<a href='https://github.com/defiads/defiads'>defiads</a>
+together prior to its public announcement.
+I am saddened by this loss.</p>
+<p>In any case, I hope to advance the development of defiads,
+which of course requires me to learn Rust in earnest.</p>
+
+</div>
+
+<div class=footer>
+<p>&copy; 2020 ZmnSCPxj.  Released under CC-BY.</p>
+<iframe src='../donation.html' frameborder=0 width='100%' />
+</div>
+
+</body>
+</html>
