@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang=en>
+<head>
+<meta charset=utf-8>
+<title>2020-01-16 Weekly Log</title>
+</head>
+<body>
+
+<div class=header>
+<p><a href='../index.html'>ZmnSCPxj</a> &raquo; <a href='index.html'>Activity</a> &raquo; 2020-01-23 Weekly Log</p>
+</div>
+
+<div class=content>
+<h1>2020-01-17 to 2020-01-23</h1>
+
+<h2>Mah Fullnode<em><strong>s</strong></em></h2>
+<p>Second hardware arrived this week as well, meaning a good amount of time
+was spent setting it up for development as well
+(<code>screen</code>, <code>vim</code>, <code>git</code>...).
+First to set up of course was SSH and Tor.
+I also set up a new Bitcoin Core fullnode on this as well.</p>
+<p>As I did not have a large-enough portable storage device I copied
+the <code>blocks</code> directory over via local network and SSH.
+This was a mistake, it seems some bottleneck along the way limited
+the transfer to not much faster than the ISP speed anyway, meaning
+it was not much faster versus just re-downloading the entire
+blockchain.
+As well, the copy of <code>chainstate</code> was not done properly
+it seems, thus I was forced to run with <code>-reindex-chainstate</code>,
+leading to even longer setup time, making me regret this.</p>
+<p>At least the new hardware has the Bitcoin Core running as a
+<code>systemctl</code> service, which is much helpful in case of a
+power interruption or other restart condition.
+Further, the new fullnode was started behind a .onion hidden
+service from its creation, which I think is quite good.</p>
+<p>I set up as well an SSH daemon over a Tor hidden service, to allow
+to communicate both hardware even if they are later placed in separate
+networks.
+Though using an SSH daemon over Tor turns out to have high latency,
+so mostly useful only for quick <code>scp</code> between them.</p>
+<p>As well, this new hardware came pre-installed with a long-term support OS,
+meaning its package versions are old.
+However, I have since discovered
+<a href='https://github.com/pyenv/pyenv'>pyenv</a>, which allows
+installing a Python version that is different from the OS-installed,
+thus allowing the system to run JoinMarket and ElectrumX, which are
+the next items I will install and run here.
+As of now JoinMarket is running and I have transferred the JoinMarket
+maker fro the previous hardware to the new one.
+Figuring out the best way to make the maker a SystemD service would be
+the next step.</p>
+<p>A foolishness is that I did not enable <code>txindex</code> from
+the start,
+and even after having to reindex, did not think to enable
+<code>txindex</code> before reindexing.
+So I may be forced to reindex once again, sigh, and that seems to
+be slow on this new hardware (and probably would be slow anywhere
+as well).</p>
+<p>I also intend to set up a C-Lightning node (again behind a Tor
+hidden service) here on this new hardware.
+Probably I will set up two, one a throwaway that will then provide
+my donation address(es), so that I can use my
+<a href='https://lists.linuxfoundation.org/pipermail/lightning-dev/2019-October/002245.html'>CoinSwapper</a>
+idea to clean incoming donations.
+I have already compiled C-Lightning 8.0.0 from the official source
+tarball and installed it, though have not run it with anything
+more complex than <code>--help</code> or <code>--version</code>.</p>
+<p>In other news my JoinMarket maker was able to earn a tiny amount
+of funds since the previous weekly log.
+Hopefully on its new home in the new hardware it will work harder!</p>
+<p>Finally, my ISP, for some reason, gave a router to connect to the
+Internet, that is apparently incapable of manually setting port
+forwardings, at all, I checked the user manuals available on the
+Internet and none of them match the exact model given to me
+(all of them show some way to set up port forwardings, but does
+not match the UI this particular model shows).
+Fortunately Tor Fixes This, Tor NAT punching FTW, still I
+specifically requested the ISP to provide a stable public IP so that
+I can support the Tor network as a relay or bridge as well, sigh.
+Without a way to forward ports the stable public IP is pointless.
+I have filed a support ticket to the ISP, hopefully they can resolve
+this without me having to go buy a better router than this
+<span title='proof-of-stake'>PoS</span><!-- PoS is a PoS -->
+they installed.</p>
+
+<h2>defiads</h2>
+<p>I have some activity in the
+<a href='https://github.com/defiads/defiads'>defiads/defiads</a>
+recently.
+Granted, this is mostly me just adding some documents detailing
+some of the thoughts behind the current defiads design, and not
+any coding or even just defiads design work.
+Sadly I was planning these documentations already late last
+year, and was not able to complete them until recently,
+to my regret.</p>
+<p>To be clear, I and Steven Roose are the current admins of
+the defiads repository, so I and/or Steven will continue to
+maintain defiads and hopefully drive its continued development.
+The repository and its organization remain owned by Tamas,
+but our admin rights to the repository should be sufficient
+for the foreseeable future.
+Philbert Wallace is probably the main coder working on defiads
+as of now.
+Both Philbert and I are new to Rust, so it will take a good
+amount of poking through the code before we actually do
+something substantial with it.</p>
+
+<h2>Privacy on Lightning</h2>
+<p><a href='https://lists.linuxfoundation.org/pipermail/lightning-dev/2020-January/002431.html'>Yet
+another lengthy spam post.</a></p>
+<p>One of the insights here is that basically, increasing the
+number of interediate nodes is not necessarily a straight
+improvement in privacy.
+This is a surprising result.
+Our intuition when considering onchain mixing is that the
+larger the number of participants in the mix,
+the greater your privacy.</p>
+<p>For instance, consider a simplified model where you, as a
+taker, perform a 2-participant CoinJoin with a maker.
+To improve your privacy, you could make multiple such
+CoinJoins with different makers.
+Suppose all <em>except</em> one of the makers are just
+sockpuppets of a surveillance company.
+That single &ldquo;honest&rdquo; maker means that
+afterwards, the surveillor has only a 50% chance of
+guessing whether you own the final UTXO of that sequence
+of CoinJoins or not.
+While not ideal, this is an entire bit of entropy relative
+to the situation where <em>all</em> the makers you chose
+were sockpuppets of the same surveillor.
+From this, we might get the intuition that more participants
+in a mix is better.</p>
+<p>For the Lightning Network, this does not apply quite as
+cleanly.
+Suppose you have this network:</p>
+<p><pre>
+               D
+               |
+               |
+A -- S1-- S2-- B -- E
+            \  |
+             \ |
+              S3 -- C
+</pre></p>
+<p>Let us assume that <code>S1</code>, <code>S2</code>,
+and <code>S3</code> are nodes owned by a single surveillor.
+So the path <code>A -&gt; S1 -&gt; S2 -&gt; S3 -&gt; C</code>
+is congruent to doing a sequence of 2-participant CoinJoins
+with 3 makers that are sockpuppets of the same surveillor,
+i.e. you get no privacy from the surveillor.</p>
+<p>Now you might be tempted to lengthen the path artificially,
+taking the path
+<code>A -&gt; S1 -&gt; S2 -&gt; B -&gt; S3 -&gt; C</code>.
+But this is not quite the same as you making a sequence of
+2-participant CoinJoins, with 4 makers, 3 of which are
+sockpuppets of the same surveillor!</p>
+<p><ul>
+<li>In the onchain case you can wait for a random number of
+blocks between CoinJoins.
+In the Lightning case, every forwarding node is strongly
+incentivized to do forwards quickly, so the sidereal time
+at which a payment leaves <code>S2</code> and enters
+<code>S3</code> is a strong indicator that this is a
+semantically-single payment.</li>
+<li>Without path decorrelation all the forwards have the
+same hash.
+The addition of <code>B</code> here is <em>utterly
+pointless</em>, as the surveillor knows for certain that
+the exact single payment here is being considered.
+Even <em>with</em> path decorrelation,
+where you could argue that in fact what happened is
+the payment actually went to <code>E</code>
+while <em>completely by coincidence</em> a payment from
+<code>D</code>,
+of a very similar value,
+at nearly the same time,
+and with suspiciously-correlated timelock,
+goes through <code>B</code> and into <code>S3</code>,
+but the surveillor will still bet against that unlikely
+possibility and consider this to be the same payment
+as well.</li>
+</ul></p>
+<p>Which illustrates the point: current Lightning still
+leaks a good amount of information (though still far less
+than non-privacy-conscious onchain use).
+In particular, the value, sidereal timing, and timelock
+are information we cannot feasibly remove
+without sacrificing security (value, timelock) or
+useability (sidereal timing).</p>
+<p>Indeed, I can point out my
+<a href='https://lists.linuxfoundation.org/pipermail/lightning-dev/2019-October/002245.html'>CoinSwapper</a>
+idea.
+It breaks value, sidereal timing, and timelock
+correlation, by splitting the payment into
+two stages:
+first you make a payment from a throwaway node,
+later you make a payment outwards from your
+normal node, taking care to break value by
+splitting it differently from the throwaway
+payer, and taking care to break sidereal timing
+by waiting for a while before transferring
+outwards.</p>
+<p>Perhaps even weirder proposals are possible,
+such as asking forwarding nodes to deliberately
+postpone forwarding (but why would they comply,
+when they could earn earlier (assuming they
+discount future coins, as is sensible for every
+entity that cannot possibly live infinitely)
+by forwarding right now?).
+Having standard payment amounts helps break value
+but there will always remain some tiny remainder
+that you either round up to the lowest standard
+payment amount and overpay to the payee, or
+lose privacy with.
+At least with timelocks we can use extended
+shadow routing, though there are still bounds
+that a surveillor can compute around.</p>
+
+<h2>Advice</h2>
+<p>Fewer people asked for advice regarding Bitcoin
+from me in this week than in the previous week.
+Topics include, but are not necessarily limited to,
+coin swapping technology and non-Bitcoin cryptocurrencies.
+Nearly all my time that is not visible on mailinglist or
+github was spent on the new hardware, and it seems likely
+in the succeeding weeks that further setting up on the
+new hardware will be my main activities.</p>
+
+</div>
+
+<div class=footer>
+<p>&copy; 2020 ZmnSCPxj.  Released under CC-BY.</p>
+<iframe src='../donation.html' frameborder=0 width='100%' />
+</div>
+
+</body>
+</html>
