@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang=en>
+<head>
+<meta charset=utf-8>
+<title>2020-01-30 Weekly Log</title>
+</head>
+<body>
+
+<div class=header>
+<p><a href='../index.html'>ZmnSCPxj</a> &raquo; <a href='index.html'>Activity</a> &raquo; 2020-01-30 Weekly Log</p>
+</div>
+
+<div class=content>
+<h1>2020-01-24 to 2020-01-30</h1>
+
+<h2>Server</h2>
+<p>A good part of my time was spent further tinkering with my brand new
+server hardware.</p>
+<p>One issue that came up was when I made my JoinMarket Maker into a
+SystemD Service.
+Obviously I set it to <code>After=bitcoind.service</code> so that it
+will start after Bitcoin Core was loaded.
+Unfortunately, the
+<a href='https://github.com/bitcoin/bitcoin/blob/638239de7502eed57f3b800d9b488de85f00d391/contrib/init/bitcoind.service'>bitcoind.service
+file</a> in the bitcoin/bitcoin <code>contrib/init/</code> directory
+does <em>not</em> wait for Bitcoin to start up completely.</p>
+<p>It turns out that Bitcoin has to re-read the block indexes when it
+starts up, and it can take up to ~7 seconds to do so.
+During this time, it will refuse to serve any RPCs.
+However, the launching process exits as soon as possible, meaning
+SystemD thinks that Bitcoin is already perfectly fine immediately,
+then starts any dependencies on Bitcoin.
+The JoinMarket Maker, being such a dependency, is then started up
+very quickly after, but fails to start because it wants to ask
+Bitcoin some RPCs but Bitcoin is not yet ready to serve those.</p>
+<p>What I did was write a simple script that just loops until a
+<code>bitcoin-cli</code> command succeeds, as below, and add it
+to <code>ExecStartPost</code>.</p>
+<pre>
+#! /bin/sh
+
+while ! bitcoin-cli "$@" getblockcount &gt; /dev/null 2&gt;&amp;1
+do
+sleep 1
+done
+</pre>
+<p>Note the <code>"$@"</code>.
+SystemD invocations are not &ldquo;normal&rdquo; and you should
+copy the <code>-datadir</code> and <code>-conf</code> arguments
+you pass into <code>bitcoind</code> to the above script.
+The above script then forwards it to <code>bitcoin-cli</code>
+via <code>"$@"</code>.
+You need <code>-datadir</code> since <code>bitcoin-cli</code>
+wants to set up a datadir if you do not have one, and the
+<code>bitcoind.service</code> in the bitcoin/bitcoin repository
+makes the home directory read-only.
+And of course the above script should be made executable as well.</p>
+<p>Obviously this delays startup and you might not want it for
+your &ldquo;normal&rdquo; computer that you regularly shut down
+and boot up every day, but for an always-on server that has to
+survive power interruptions and automated updates, the additional
+delay to wait for proper startup of other services dependent on
+Bitcoin is worth it.</p>
+<p>In C-Lightning, we avoid this.
+Daemonization requires that a process fork twice, with the parent
+and its direct child exiting, and the grandchild process being
+the daemon that lives on.
+However, on C-Lightning, before the fork we establish a pipe
+from the parent to the grandchild process.
+The grandchild does some initializations and database loading,
+then establishes the RPC and then closes the pipe.
+Once the pipe is closed, only then does the parent actually
+exit.
+This technique fits better with SystemD, as it assumes the
+exit of the parent means the daemon is now working properly.</p>
+
+<h2>Coding</h2>
+<p>I had a good amount of activity and pull requests on
+<a href='https://github.com/ElementsProject/lightning'>ElementsProject/lightninh</a>
+and
+<a href='https://github.com/defiads/defiads'>defiads/defiads</a>.
+Well for defiads mostly just me reviewing and commenting and merging.</p>
+<p>For C-Lightning, mostly a few clarifications, and some minor modifications
+and improvements, including the ability to now set permissions on the
+C-Lightning RPC file, and to immediately finish <code>waitanyinvoice</code>
+if no unprocessed invoice is currently available.
+I am still working on <code>multifundchannel</code>, but for now I
+will make <code>connect</code> have the ability to connect to multiple
+nodes at once, to test out my
+<a href='https://github.com/ElementsProject/lightning/issues/3401'>sparks</a>
+implementation.
+Later I will add <code>multifundchannel_start</code> and
+<code>multifundchannel_complete</code> and
+<code>multifundchannel_cancel</code>, I suppose.</p>
+
+<h2>Advice</h2>
+<p>Only a small amount of people asking about advice this week.</p>
+
+<h2>Tor Browser</h2>
+<p>I am slowly transitioning to using Tor Browser almost exclusively,
+when emulating a human operating a standard computer.
+Previous hardware (and maybe its LTS OS?) and ISP gave bad experience when
+doing anything in Tor Browser, it seems with my current ISP and hardware
+(OS?) Tor is almost as smooth as a commodity "home" ISP common
+in the places I have infested.</p>
+<p>Some websites, however, keep thinking of my Tor Browser as a new device
+and keep asking for multi-factor authentication.
+GitHub is one of these.</p>
+<p>This is particularly daft since I can <code>torify git push</code> to
+GitHub <em>without</em> being pestered about multi-factor authentication.
+And the worst thing you can do to a GitHub repository is to <em>push bad
+code into it</em> and wait for victims to pull and execute your code.
+So the multi-factor authentication pestering is just not that useful
+against protecting GitHub repositories,
+and is just an annoyance at this point.</p>
+<p>Google applications are another set of pesterers.
+I should probably avoid Google applications, but GitHub is not really
+something I can feasibly avoid.</p>
+
+<h2>Zenon</h2>
+<p>With the help of Grounded Speculator, I found out that an entity
+called Zenon Networks is trying to somehow connect itself to
+Square Crypto via the coincidental similarity of &ldquo;ZNN&rdquo;
+to &ldquo;Zmn&rdquo;.</p>
+<p>You might want to see the
+<a href='https://medium.com/@groundedspeculator/zmnscpxj-weighs-in-on-zenon-network-aa0963f107d4'>medium
+article that Grounded Speculator wrote</a>.
+The screenshots of emails are authentic.</p>
+<p>Briefly: I am not associated with Zenon network, I have not
+developed code for Zenon network, I no longer think sidechains
+are useful (they are not at all useful for scaling, and additional
+features to mainchain, while desirable, are <em>not</em> necessary
+for the survival and continued usefulness of Bitcoin: offchain
+transactions, which just require n-of-n, are all you need in
+the future, and even a good number of features can be done with
+e.g. <a href='../bitcoin/unchained.html'>Smart Contracts Unchained</a>,
+which is largely an <em>offchain</em> proposal, not a sidechain one).
+I am a coder, I write code, you can check my
+<a href='https://github.com/ZmnSCPxj'>publicly-available
+code</a> and see my coding style and compare it
+to the code of Zenon network (if you can <em>find</em> any).</p>
+
+</div>
+
+<div class=footer>
+<p>&copy; 2020 ZmnSCPxj.  Released under CC-BY.</p>
+<iframe src='../donation.html' frameborder=0 width='100%' />
+</div>
+
+</body>
+</html>
