@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang=en>
+<head>
+<meta charset=utf-8>
+<title>Multiparticipant CoinSwap</title>
+</head>
+<body>
+
+<div class=header>
+<p><a href='../index.html'>ZmnSCPxj</a> &raquo; <a href='index.html'>Bitcoin</a> &raquo; Multiparticipant CoinSwap</p>
+</div>
+
+<div class=content>
+
+<h1>Introduction</h1>
+<p><a href='https://joinmarket.me/blog/blog/multiparty-s6/'>S6</a>
+is a multiparticipant CoinSwap.
+Unfortunately, as described,
+it cannot achieve maximal privacy for the number of swaps involved.
+This is because all participants must first agree on a single
+permutation of participants.
+If a blockchain analyst notices the CoinSwap,
+then it need consider only &ldquo;circular&rdquo; permutations,
+i.e. (N - 1)!.</p>
+
+<h1>Pointless Digression</h1>
+<p>During World War II, Germany made use of the
+<a href='https://en.wikipedia.org/wiki/Enigma_machine'>Enigma Machine</a>.
+At the time, the Enigma was novel cryptography,
+and we all know the Zeroth Commandment of Cryptography:
+<strong><em>Thou Shalt Not Roll Thy Own Crypto</em></strong>.</p>
+<p>A major flaw of Enigma was that
+<em>no letter could ever encode to itself</em>.
+This was because of a component known as the reflector, which made
+Enigma a self-reciprocal encryption and reduced the physical size of
+the machine.</p>
+<p>Codebreakers were able to exploit this flaw to make further analysis
+of the rest of the Enigma machine.
+What they did was to put a possible plaintext
+side-by-side with a known ciphertext.
+If any letter in the plaintext matched in the same location with the
+ciphertext, then they knew that the plaintext did not correspond to that
+particular ciphertext &mdash;
+<em>no letter could ever encode to itself</em>,
+so if a possible plaintext had even one letter that matched with the
+ciphertext letter, then that was not the plaintext behind the ciphertext.</p>
+<p>What was generally done was that typical pieces of plaintext, such as
+&ldquo;Keine besonderen Ereignesse&rdquo; (&ldquo;nothing to report&rdquo;),
+&ldquo;ANX&rdquo;
+(&ldquo;to&rdquo; i.e. to indicate the recipient of an order,
+with &ldquo;X&rdquo; used to replace spaces / punctuation), or
+&ldquo;FORT&rdquo;
+(short for &ldquo;fortsetzung&rdquo; or &ldquo;continuation&rdquo;,
+then followed by a timestamp indicating the time of the previous message
+that this message was a continuation of)
+would try to be matched on various locations in the ciphertext
+(i.e. a known-plaintext attack to start the cryptanalysis).
+Names and locations already known to be of interest to Germany,
+as well as typical German military jargon, could also be tried.
+If none of the letters matched, the chances were good that it would be
+the plaintext behind the ciphertext,
+because <em>no letter could ever encode to itself</em>.</p>
+<h2>The S6 Non-maximal Privacy</h2>
+<p>S6, as mentioned, does not have maximal privacy.
+This is because it only requires a circular permutation
+of the participants.</p>
+<p>More specifically, suppose we have 3 participants in S6, A, B, and C.
+We would shuffle these participants.
+Suppose we got the order C, A, B.
+Then C would pay to A, A would pay to B, and B would pay to C.
+Notice that this is a circle, and thus the number of permutations is
+only (N - 1)! due to this really being a circular permutation.
+In particular, onchain the order C, A, B would also be look the
+same as the order B, C, A and A, B, C.</p>
+<p>The core realization here is that
+<em>no participant could ever pay to itself</em>.
+This leads to the possibility of further analysis
+of previous and subsequent behavior,
+being simplified by taking this heuristic when a multiparticipant
+CoinSwap is detected.</p>
+<p>Unfortunately, due to the need for staggered timeouts at each step,
+such a circular payment is required by the S6 construction.
+In particular, every multiparticipant CoinSwap that creates any kind
+of &ldquo;route&rdquo; similar to Lightning Network would have the
+same <em>no participant could ever pay to itself</em> weakness.
+Thus, if blockchain analysis identifies a possible CoinSwap via other
+heuristics, this heuristic can be used to reduce the privacy before
+and after the mix.</p>
+<p>(I am aware that things like multitransaction CoinSwap can make it
+very hard to identify CoinSwap occurring on the blockchain in the first place,
+but it seems to me safer to have multiple layers of obfuscation,
+as the opportunity to do multitransaction
+might not always be available;
+practical limits on multitransaction
+(who can afford to split their funds to a hundred UTXOs,
+in particular the fees involved in spending those?)
+can reduce the effort needed to crack the obfuscation.)</p>
+<p>To be very clear, it is certainly a strength of CoinSwap that
+it can be hidden among ordinary payments.
+But it is also a property of CoinSwap that the cycle of payments have
+to be around the same amount.
+Thus, when analyzing multiple transactions, it would be possible to find
+some number of transactions with similar payment amounts.
+Even with multitransaction,
+we can bound the number of transactions making up one payment
+in the overall CoinSwap.</p>
+<p>It is helpful to compare this to CoinJoin.
+In CoinJoin, the inputs and outputs are shuffled separately, and we
+get very good privacy: the ith input might not correspond to
+the ith output, but it also <em>might</em>, and because of this,
+we can say that the ith input is paying to the ith output and that
+participant could be paying to itself.
+(I am aware that CoinJoin typically will have multiple inputs and
+multiple change outputs as well, but in the case where everyone has a UTXO
+of the exact correct size, then the simple ith input and ith output case
+would still avoid <em>no participant could ever pay to itself</em>
+of the corresponding simple &ldquo;circular routed&rdquo; CoinSwap.)
+Thus we can consider that the weakness of this CoinSwap is due to
+having only one shuffle of all the participants,
+whereas CoinJoin shuffles the participants as inputs separately fom
+shuffling the participants as outputs.
+An N-participant CoinJoin would have N! possible permutations,
+while an N-participant CoinSwap would have (N - 1)! possible permutations.
+CoinSwap takes up much more blockchain space as well.
+With N=10 this means CoinJoin has an order-of-magnitude more possible
+permutations than CoinSwap, thus has greater obfuscation.</p>
+<p>Of course, identifying possible CoinJoin transactions onchain is
+significantly easier than identifying possible CoinSwaps,
+i.e. CoinSwap is (at least a little) steganographic.
+But transactions of similar value (or, to handle the multitransaction case,
+small groups of transactions of similar value) that are in nearby
+blocks are probably multiparticipant CoinSwaps as well.
+It would be nice if we could somehow create a non-circular
+CoinSwap mechanism so that, even if a CoinSwap is successfully identified,
+it would have N! possible permutations rather than (N - 1)!.</p>
+
+<h1>Directionality</h1>
+<h2>Time-based Directionality</h2>
+<p>S6 requires &ldquo;staggered&rdquo; timeouts,
+i.e. if the shuffled order is C, A, B,
+then the B-&gt;C payment has a shorter timeout
+than the A-&gt;B payment,
+which has a shorter timeout
+than the C-&gt;A payment.
+Now, in the ideal case where the protocol completes,
+timeouts are not published onchain,
+so this should not be a problem, right?</p>
+<p>Of course, the fact that the timeouts are
+&ldquo;staggered&rdquo; means that
+C has to claim its incoming payment before B and A does.
+We can thus expect that the claim transaction done by C
+will be broadcast to the Bitcoin network earlier
+than the claim transaction transaction of B and A.
+This can provide hints as to the shuffle order,
+which a blockchain analyst can then use to identify
+who ended up with which UTXO.</p>
+<p>To protect against this, A, B, and C will have to set up
+the entire S6 mechanism first, but instead of C claiming funds
+onchain right after setup,
+all of the participants have to create <code>nLockTime</code>-locked
+transactions for each claim.
+The <code>nLockTime</code> are randomized, from the current blockheight
+to just before the shortest timeout.
+Then C broadcasts the payment secret and enables all the claim
+transactions to become valid.
+The random <code>nLockTime</code> ensures that the transactions are
+broadcast to the blockchain in some random order, preventing leakage
+of the shuffle order.</p>
+<p>Increasing the timeouts involved would help spread out the transactions
+of the CoinSwap in time, at the cost of increasing the time that CoinSwap
+takes.</p>
+<h2>Value-based Directionality</h2>
+<p>One of the obvious ways to set up a multiparticipant CoinSwap system
+would be to emulate existing systems like JoinMarket and Lightning network.
+That is, there are pre-existing entities that offer their liquidity in
+exchange for fees (i.e. &ldquo;maker&rdquo;/&ldquo;forwarding node&rdquo;),
+then later some entity takes the offered service
+to perform mixing or payment
+(i.e. &ldquo;taker&rdquo;/&ldquo;payer&rdquo;).</p>
+<p>Since the makers are offering this as a service, they have to get paid
+some fees for performing CoinSwaps.</p>
+<p>The naive way to do so would be to emulate Lightning and give the
+payment in the swap operations as well: if C is the taker, then the
+C-&gt;A payment is of greater value than the the A-&gt;B payment
+(the difference being the fee paid, as in Lightning),
+and the A-&gt;B payment is greater than the B-&gt;C payment.</p>
+<p>Of course, once the payments are identified as belonging to a single
+CoinSwap, the differences in payment amount leak the shuffle order.
+Obviously the output of the smallest payment
+has the same history as the input of the largest payment
+(remember, this is a circle of payments),
+and that history is the history of the taker.</p>
+<p>Worse, if the amount being mixed is a few orders of magnitude
+larger than the fees involved
+(a reasonable assumption, that we see in JoinMarket and Lightning),
+then amount correlation can still help identify CoinSwaps
+on the blockchain (small differences can be neglected at this stage),
+then the differences in each sub-payment of the CoinSwap
+can then be used in further analysis to reveal the shuffle order.</p>
+<p>Regardless of shuffle order, the taker has to give out more money
+than it receives,
+and each maker gives out less money than what it receives.
+By this knowledge, a blockchain analyst can determine the shuffle order
+and who the taker is.
+And once the blockchain analyst knows the shuffle order,
+it knows who paid whom and thus can correlate the history of the
+outputs with the inputs.</p>
+<p>To protect against this, fees would have to be paid by other means.
+If C is the taker, then it knows the payment secret.
+Then it can set up Lightning payments to A and B for their fees,
+with a final CLTV greater than the outgoing timeouts of A and B.
+The payment secret onchain is then the same as the payment secret used
+on-Lightning
+(this is exactly what is used in Lightning Loop, Boltz,
+and other onchain/offchain swap mechanisms).
+Then the onchain payments will have the same amount,
+preventing leaking of the shuffle order.</p>
+<p>Alternately, if we do not want to ride on top of Lightning, we can
+have C create conditional onchain payments to A and B as well that are
+separate from the payment from CoinSwap C-&gt;A and A-&gt;B payments.
+These extra payments are the fees paid
+by the taker C to the makers A and B.</p>
+<pre>
+    Instead of (where C is the taker):
+
+      C -amt+feeA+feeB-> A ---amt+feeB---> B
+      ^                                    |
+      |                                    |
+      +-----------------amt----------------+
+
+    Use:
+
+      +----------------feeB----------------+
+      |                                    |
+      +-------feeA-------+                 |
+      |                  |                 |
+      |                  v                 v
+      C ------amt------> A -----amt------> B
+      ^                                    |
+      |                                    |
+      +-----------------amt----------------+
+</pre>
+<p>Of course, if the fees are small, then it might not be practical to have
+those UTXOs onchain.
+We could use a form of payjoin such that conditional payments are merged
+as well from C funds to A and B funds
+(briefly, the fee payment from C to B would spend UTXOs owned by C and B;
+for example, if C owns 1 BTC and B owns 1 BTC, and the fee is agreed to be
+0.001 BTC, then we first create a transaction spending the B and C funds
+and outputting to a 2BTC output, then a claim transaction conditional on
+the CoinSwap being completed which spends the 2BTC output and creates a
+C-owned 0.999 BTC output and a B-owned 1.001 BTC output &mdash;
+this can be construed as equivalent to dual-funding a Lightning channel
+and then paying the fee over the channel, then closing the channel,
+incidentally).
+This prevents the creation of uneconomical dust UTXOs,
+but it requires that C have some
+other liquid funds that it cannot add to the mix,
+allocated solely for paying fees.</p>
+<p>Note that, in JoinMarket parlance, the mixdepth of the incoming fee
+would have to be different from the mixdepth of the incoming CoinSwap
+amount, else it would just as well leak who is the maker and who is the
+taker as well.</p>
+<p>Finally we can just wait for Bitcoin to have confidential transactions
+so that amount correlation
+and subsequent amount analysis is impossible.</p>
+
+<h1>Breaking The Circle</h1>
+<p>The cyclic nature of the payment is difficult since
+leaking the shuffle order is sufficient to completely reveal
+the entire CoinSwap.
+The output shuffle order might be leaked by subsequent behavior,
+which could mean an easier break of a CoinSwap round
+compared to a CoinJoin round.</p>
+<h2>Simultaneous Equal CoinSwap</h2>
+<p>If we were able to magically shuffle who pays to whom,
+then natural cycles would exist.</p>
+<p>For example, suppose we shuffle four participants A, B, C, D.
+We then shuffle them randomly to B, A, D, C.
+Suppose instead of forming a cycle of payments
+B-&gt;A, A-&gt;D, D-&gt;C, C-&gt;B,
+we instead pair up the above shuffle (B, A, D, C)
+with the unshuffled (A, B, C, D),
+resulting in the sequence ((B, A), (A, B), (D, C), (C, D))
+and create payments B-&gt;A, A-&gt;B, D-&gt;C, C-&gt;D.
+By not making a single large cycle, we approach nearer to N!
+rather than (N - 1)! possible permutations.</p>
+<p>But we should also notice that this effectively creates
+two cycles: A-&gt;B-&gt;A, and C-&gt;D-&gt;C.
+Thus, one way to increase the obfuscation of CoinSwap
+would be to run multiple CoinSwap cycles in parallel,
+all of them with the same amount.
+Some of these &ldquo;CoinSwaps&rdquo; could even be
+just direct self-payments, therefore breaking
+<em>no participant could ever pay to itself</em>.</p>
+<p>Then, an independent blockchain analyst would not
+be able to assume that all the payments occurring,
+that happen to have equal values,
+form a <em>single</em> large cycle;
+or in other words, we are able to leave the (N - 1)!
+circular permutations and instead approach N! permutations.</p>
+<p><ol>
+<li><p>In a JoinMarket-like system, a taker could
+split the amount it wants mixed into multiple equal parts,
+then trigger multiple multiparticipant CoinSwap cycles in parallel.
+For example, instead of mixing an entire 1.0 BTC
+in a single large CoinSwap round with 4 makers,
+it can mix 0.5 BTC in a CoinSwap round with 3 makers and
+another 0.5 BTC in a CoinSwap round with 1 maker.</p>
+<p>Of course, care must be taken to ensure that
+the taker redistributing the values of
+its (likely non-equal) UTXOs
+does not leave any evidence onchain.
+If the taker has non-equal UTXOs,
+then it should somehow be able to trade them for
+equal-valued UTXOs without leaking this information onchain.</p></li>
+<li><p>Alternately, any CoinSwap system could require
+that all swaps have a specific value,
+or that the swap value is from a limited set of allowed values.
+This would greatly help prevent blockchain analysts
+from differentiating various cycles.
+This also simplifies self-swapping, as you just self-swap
+one of the standard amounts and this helps not just yourself,
+but everyone following the same standard sets of values.</p></li>
+</ol></p>
+<h2>Third-Party Enabler</h2>
+<p>It would be best if we could truly shuffle who pays whom
+without forming a large cycle of payments,
+meaning there is the possibility of a self-payment.</p>
+<p>We can do this by requiring an external party that does not
+participate in the multiparticipant CoinSwap.
+Instead, it generates the payment secret,
+and once its fee is paid completely,
+it releases the payment secret.
+This is similar to the concept of
+<a href='https://lists.linuxfoundation.org/pipermail/lightning-dev/2019-October/002214.html'>barrier escrow</a>
+I and Nadav have proposed before.</p>
+<p>The fee of this third-party barrier escrow is paid
+by a single transaction constructed by all the participants.
+What happens is that the CoinSwap transactions have equal value
+<em>and equal timeout</em>.
+Then the barrier escrow is offered the barrier escrow fee transaction,
+with a shorter timeout.
+Once the barrier escrow claims the escrow fee transaction,
+it reveals the payment secret that allows
+the other payments to be claimed.</p>
+<p>This is not a perfect solution, however,
+since the barrier escrow can collude with a participant
+and provide the payment secret only to that participant,
+which the participant can use just before the shared equal timeout,
+hoping it can get its outgoing timeout branch
+and its incoming payment secret branch.
+This can be done trivially by sybilling an extra participant
+in the CoinSwap.</p>
+<p>In discussion with waxwing on the S6 blog comments,
+a similar scheme where one of the participants has a shorter timeout
+and all the others have the same, longer timeout, was also derived.
+That scheme has a similar weakness as this scheme,
+where the participant claiming a shorter timeout could collude
+with another participant (or use a sybil).
+In effect, that participant also doubles as this
+third-party barrier escrow</p>
+
+</div>
+
+<div class=footer>
+<p>&copy; 2020 ZmnSCPxj.  Released under CC-BY.</p>
+<iframe src='../donation.html' frameborder=0 width='100%' />
+</div>
+
+</body>
+</html>
+
+
