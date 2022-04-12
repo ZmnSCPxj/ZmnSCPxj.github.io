@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang=en>
+<head>
+<meta charset=utf-8>
+<title>Overall Architecture; CLBOSS</title>
+</head>
+<body>
+
+<div class=header>
+<p><a href='../index.html'>ZmnSCPxj</a> &raquo; <a href='index.html'>CLBOSS</a> &raquo; Overall Architecture</p>
+</div>
+
+<div class=content>
+<p>Updated: 2022-04-12</p>
+<h1>Introduction</h1>
+<p>This writeup serves not only as a description of the overall
+architecture of CLBOSS, the C-Lightning Automated Node Manager,
+it also serves as an introduction to this entire series of
+writeups about CLBOSS.</p>
+<p>First, notice that this document has an &ldquo;Updated&rdquo;
+line at the top.
+Generally, I think most of the architecture of CLBOSS is unlikely
+to change, but it <em>can</em> change over time, and this document
+might thus become dated.
+Thus, the &ldquo;Updated&rdquo; will be present on all documents
+in this series.
+While I do not expect CLBOSS to change much in the meantime, if
+you are reading this several years after the &ldquo;Updated&rdquo;
+date, you might want to take this with some random number of
+grains of salt.</p>
+<p>I intend to write out a few more documents after this, over the
+next few weeks or months.
+So, if as of now you are seeing just this document, stay tuned for
+more.</p>
+<p>In <em>this</em> particular writeup, I will describe the overall
+architecture of CLBOSS.
+This document is fairly technical, as it mostly describes software
+architecture, which is generally of interest only to other
+programmers.
+However, I hope laymen may glean some more understanding of the
+overall architecture and some of its advantages and why CLBOSS is
+structured this way.</p>
+
+<h1>TLDR</h1>
+<p><ul>
+ <li>The core is a central message bus, which delivers messages
+     from anything that <code>.raise()</code>s a message, to all
+     objects that <code>.subscribe()</code>d to that message type.</li>
+ <li>CLBOSS is composed of this central bus, plus a bunch of
+     modules.</li>
+ <li>The modules connect to the bus in order to broadcast and listen
+     for messages.</li>
+ <li>CLBOSS uses large numbers of so-called &ldquo;greenthreads&rdquo;,
+     which are like threads but much more lightweight (no kernelspace
+     involvement, just a few pointers on a stack or heap object).
+     This allows CLBOSS to keep on going on even if some procedure
+     unexpectedly fails, since the failure will (usually) only crash its
+     greenthread, and makes it convenient to write &ldquo;blocking&rdquo;
+     code without <em>actually</em> blocking other greenthreads.</li>
+ <li>Some modules also affect / are affected by the real world outside
+     of CLBOSS.
+     These modules listen for events on the message bus and affect the
+     real world, and / or respond to some real world event by
+     broadcasting a message on the message bus.</li>
+ <li><em>Most</em> modules just listen for particular messages, update
+     their internal or on-disk state, and then broadcast other messages
+     for the rest of the modules to consume.</li>
+ <li>Much of CLBOSS is really controlled by a timer module that just
+     emits messages on a regular timered schedule, and then other
+     modules check the node status and respond to the node status as
+     appropriate to manage the node.</li>
+ <li>The modular architecture makes it easy to add new behavior, or
+     disable some behavior.</li>
+ <li>The modular architecture makes it easy to test individual modules
+     in isolation.</li>
+ <li>The description here is an idealization to be targeted, the actual
+     CLBOSS does not quite match it perfectly. ^^;v</li>
+</ul></p>
+<p>The rest of <em>this</em> writeup is significantly more technical,
+though the other writeups in this series should not be as technical
+as the below.</p>
+
+<h1><code>S::Bus</code></h1>
+<pre>
+namespace S { class Bus; }
+</pre>
+<p>At the very core of CLBOSS is a simple centralized signal bus,
+<code>S::Bus</code>.
+This bus is really just a massive centralized publish-subscribe
+pattern, intended for use in a single process rather than across
+processes or machines.</p>
+<p>As a message signalling bus, various clients of the
+<code>S::Bus</code> can <code>.subscribe()</code> to particular
+message keys, providing a function to be executed.
+When a message (which must have exactly one message key) is
+<code>.raise()</code>d, all functions registered to that key will
+then be invoked, but none of the other function will.</p>
+<p>CLBOSS is composed of modules, and each module is
+&ldquo;attached&rdquo; to the bus.
+By &ldquo;attached&rdquo; I mean that an instance of the module
+class is constructed, and given a non-<code>const</code> reference
+to the central <code>S::Bus</code>.
+The module constructor can then subscribe to particular
+messages on the bus, and keep a reference to the bus so the
+module can publish its own messages.
+The module itself is primarily composed of code and data that the
+module needs in order to handle its task.</p>
+<p>Messages are keyed by C++ type using type introspection with
+C++ <code>std::type_index</code>.
+Thus, messages <em>can</em> be of any arbitrary C++ type (both
+built-in or <code>class</code>-based), the only requirement
+imposed is that the type is moveable in C++11 terms (it need not
+be copyable).</p>
+<pre>
+template&lt;typename T&gt;
+void can_be_raised_on_s_bus(T&amp; t) {
+        (void) std::move(t);
+}
+</pre>
+<p>For CLBOSS specifically, the messages sent over the bus are
+always passive data with only public data members, not active
+objects with function members.
+However, some messages do have data members of type
+<code>std::function</code>, though the typical intent is that
+the function itself is the data to be passed around with the
+message, and does not encapsulate the details of the message,
+only its own captured variables.</p>
+<p>As a convention, CLBOSS modules are placed in the namespace
+<code>Boss::Mod</code> (i.e. all modules have a prefix of
+<code>Boss::Mod::</code>).
+Some generic classes that are useful across multiple modules
+are placed in the <code>Boss::ModG</code> namespace, the
+<code>G</code> meaning &ldquo;generic&rdquo;.</p>
+<p>Data structures intended to be used as messages are placed
+in the namespace <code>Boss::Msg</code>.
+Such data structures are plain <code>struct</code>-like classes
+with no function members and only public data members.</p>
+<p>This central bus makes CLBOSS easily modular.
+The bus does not require that particular modules be installed
+or not installed.
+New modules can be added with little impact to other modules
+that have other responsibilities.
+Old code can be easily removed by simply removing the module,
+again with little impact to unrelated modules.
+Modularity means also that behavior can be modified or
+changed by injecting messages into the bus.</p>
+
+<h1>Execution</h1>
+<pre>
+namespace Ev { template&lt;typename a&gt; class Io; }
+</pre>
+<p>The templated class <code>Ev::Io&lt;a&gt;</code> is used
+to represent pending executable code which will yield the
+templated type <code>a</code> later when execution completes.</p>
+<p><code>Ev::Io&lt;a&gt;</code> is a CPS monad, in Haskell terms
+(and is named after the Haskell <code>IO a</code> type).
+In JavaScript terms it is a <code>Promise</code>.
+In C terms, it represents a function that accepts a callback,
+and is tied to some context pointer for that function.</p>
+<p>It uses a syntax inspired by the JavaScript
+<code>Promise</code> type: the <code>.then()</code> method /
+member function.
+The <code>.then()</code> is equivalent to <code>&gt;&gt;=</code>
+in Haskell.
+For an object of type <code>Ev::Io&lt;a&gt;</code> with any
+type <code>a</code>, the <code>.then()</code>/<code>&gt;&gt;=</code>
+will combine that object with a function that accepts a plain
+type <code>a</code>, and returns an object of type
+<code>Ev::Io&lt;b&gt;</code>, where <code>b</code> can be any
+type (and can be the same as, or different from, <code>a</code>.</p>
+<p>The result of the <code>.then()</code> combinator is of type
+<code>Ev::Io&lt;b&gt;</code>, and executing the result is equivalent
+to:</p>
+<p><ol>
+ <li>Executing the original <code>Ev::Io&lt;a&gt;</code> object.</li>
+ <li>Extracting the resulting <code>a</code> (in callback terms,
+     getting the resulting <code>a</code> via an argument to the
+     callback).</li>
+ <li>Executing the given function, which returns an
+     <code>Ev::Io&lt;b&gt;</code>.</li>
+ <li>Executing the resulting <code>Ev::Io&lt;b&gt;</code>, and
+     yielding the resulting <code>b</code>.</li>
+</ol></p>
+<p>So how do we &ldquo;execute&rdquo; an
+<code>Ev::Io&lt;a&gt;</code>?
+We invoke its <code>.run()</code> member function, which requires a
+callback (which requires a single argument of type <code>a</code> and
+returns nothing).
+When the <code>Ev::Io&lt;a&gt;</code> finishes execution, then the
+callback gets invoked with the result.</p>
+<p>At its heart, this is a CPS monad, i.e. this is basically a nice
+syntax for C code using callbacks.
+If you have seen some of the more complex C plugins built into
+C-Lightning, such as <code>multifundchannel</code>, then you know
+how much a PITA callback-using style is to code in C.
+The <code>.then()</code> syntax together with C++11 lambda functions,
+makes it look significantly nicer: there is no need to write multiple
+short file-local functions with their own long boilerplate to
+declare.</p>
+<p>This is important since callback-using style (i.e.
+continuation-passing style or CPS) allows <dfn>greenthreads</dfn> to
+be implemented in userspace.
+Greenthreads are like threads, but context switching is cooperative
+rather than preemptive, and launching a new thread is cheap &mdash; it
+is just an <code>Ev::Io&lt;a&gt;</code> having its <code>.run()</code>
+member function invoked, and does <strong>not</strong> involve a
+context switch from userspace to kernelspace, having the OS update its
+thread tables and allocating a fresh, and large, C stack.
+Greenthreads are thus lightweight.
+In fact, some higher-level languages use greenthreads in their runtime
+for concurrency, and encourage programmers to launch new
+greenthreads for all tasks.</p>
+<p>CLBOSS makes extensive use of multiple parallel greenthreads
+running at the same time.
+All greenthreads in CLBOSS run in a single process-level thread, the
+main thread of the CLBOSS process.</p>
+<p>By using greenthreads, we avoid getting bogged down by the heavy
+weight of <em>actual</em> preemptive OS-level threads.
+Preemptive OS threads are not only heavyweight, but also require
+proper mutex usage &mdash; all greenthreads run on the same main
+process thread, so do not require mutexes, as long as you do not
+run an <code>Ev::Io&lt;a&gt;</code> that blocks and returns to the
+main loop, you have exclusive access to all memory and variables
+will not change out from under you.</p>
+<p>Another advantage is that it makes integrating into event loops
+much neater.
+Suppose we want to wait for an input to arrive on some pipe or socket.
+If we were to <code>read()</code> directly, then the entire main
+thread blocks and the rest of CLBOSS will stop executing.
+However, because <code>Ev::Io&lt;a&gt;</code> accepts a callback, we
+can instead make a <code>read()</code>-like function that results in
+an <code>Ev::Io&lt;a&gt;</code>.
+That <code>Ev::Io&lt;a&gt;</code> object will then take its callback,
+and register it into the event loop as &ldquo;waiting for this pipe /
+socket to be ready for reading&rdquo;, and then return without invoking
+any callback.
+This causes execution to resume back to the top-level main event loop,
+which then handles the new registration and adds it to its
+<code>select()</code> or <code>poll()</code> or whatever.
+Then when the event loop triggers the waiting event, the callback is
+invoked, and the rest of the greenthread resumes execution.
+The main event loop can thus handle large numbers of greenthreads
+executing simultaneously.</p>
+<p>This style allows easily coding CLBOSS as if everything were
+blocking instead of asynchronous, even though at the low level we
+are actually treating everything as being asynchronous.
+The <code>Ev::Io&lt;a&gt;</code>, plus some small amount of glue
+code to connect to the main loop, serves as a bridge between our
+apparently blocking multithreaded surface syntax, to our actual
+asynchronous non-blocking single-thread event loop implementation.</p>
+<p>CLBOSS uses the <code>libev</code> library for its main loop,
+hence why the <code>Ev::Io&lt;a&gt;</code> type is in the <code>Ev</code>
+namespace.
+However, the actual type itself does not strictly require
+<code>libev</code> and can be trivially adapted to any event system
+main loop library.
+Aspiring C++ template metaprogrammers should check out how it
+implements type introspection of function return types, too (warning:
+template metaprogramming can drive you insane, learn at your own risk,
+Ph'nglui mglw'nafh template metaprogramming R'lyeh wgah'nagl fhtagn).</p>
+<p>CLBOSS is an automated node manager, and a node manager needs to
+do many things, and even if it fails at one of those things, it
+should still try its best to handle all the <em>other</em> things we
+expect it to do.
+Greenthreads makes it easy for CLBOSS to handle many things, and
+exceptions are specially handled so that an exception thrown in one
+greenthread does not bring down other greenthreads.
+This makes CLBOSS resilient against failures in one of its tasks;
+other tasks we have for it remain operational.</p>
+
+<h1>Oracle Modules And Compute Modules</h1>
+<p>Roughly speaking, we can classify CLBOSS modules into two
+large categories:</p>
+<p><ol>
+<li><dfn>Oracle</dfn> modules connect to the outside world and
+cause messages to occur on the bus in reaction to outside-world
+events, or respond to bus messages by manipulating the outside
+world.</li>
+<li><dfn>Compute</dfn> modules only &ldquo;think&rdquo;, they
+listen only to on-bus messages, possibly store some local state
+(or possibly on-database state), perform a computation, and emit
+messages on the bus depending on what the module is intended to
+do.</li>
+</ol></p>
+<p>(OOP: There are <em>no</em> base classes for modules, as I
+prefer composition over inheritance.
+Thus, there are also no base classes for oracle or compute
+modules.
+Whether a module is oracle or compute is based on whether
+it is possible to test it only by attaching it to the message
+bus (i.e. compute) together with dummy modules, or if we need
+to somehow emulate some real outside world (i.e. oracle).)</p>
+<p>An example of an oracle module is <code>Boss::Mod::Timers</code>.
+This module simply waits for certain set amounts of time, and
+then launches a new greenthread to raise a timer message.
+This module is responsible for emitting the messages:</p>
+<p><ul>
+ <li><code>Boss::Msg::Timer10Minutes</code>, sent once every
+     10 minutes from the time CLBOSS starts.</li>
+ <li><code>Boss::Msg::TimerRandomHourly</code>, sent at
+     approximately once an hour, but with some randomness on
+     its exact timing.</li>
+ <li><code>Boss::Msg::TimerRandomDaily</code>, sent at
+     approximately once a day with some randomness.</li>
+</ul></p>
+<p>A lot of &ldquo;oracle&rdquo; modules actually just listen
+for one of the timer events, then execute RPC commands to the
+managed C-Lightning node in order to check its status.
+Then based on the status of the C-Lightning node, the module
+then emits messages reporting the status of the C-Lightning
+node.</p>
+<p>A new greenthread is launched just to broadcast each of
+the messages.
+This makes the <code>Boss::Mod::Timers</code> module robust, as
+any exceptions caused by code triggered by the timers will not
+cause the timer loops to crash, so that the timer will always
+raise the message on the next scheduled time.
+This makes CLBOSS resilient against temporary failures that
+were not handled properly by my code; if something triggered
+by a timer fails <em>now</em>, then later the
+<code>Boss::Mod::Timers</code> will re-trigger it again,
+hopefully with the failure already resolved, and other parts
+of the system will continue to run and operate normally.</p>
+<p>There are random hourly and daily messages; for example,
+the random hourly is broadcast between 30 minutes to 90 minutes
+from the previous broadcast.
+The intent is to be resilient in case of observable time-related
+behavior that might be exploited by sentient nodes / node
+managers in attacks.
+No known attacks exist, but it helps to be prepared for them
+by making at least time-based attacks at least harder by having
+some randomization.
+The 10-minute timer is always fixed duration between
+broadcasts, and is intended to be used for monitoring the node,
+while changes to the node state (feerates, rebalances, etc.)
+are triggered by the random hourly and/or random daily.</p>
+<p>Having a separate &ldquo;compute&rdquo; category makes
+testing of algorithms much simpler, in combination with the
+central bus architecture.
+A test of a single compute module involves just instantiating
+the <code>S::Bus</code> together with the module under test,
+plus some dummy modules that emulate the other modules the
+compute module would interact with.
+Since the oracle modules can be replaced, it is easy to
+provide arbitrary stimulus to the compute module under test,
+broadcasting arbitrary messages and checking for arbitrary
+responses from the module under test.
+In short, this just showcases the advantage of the dependency
+inversion principle: instead of compute modules depending
+directly on oracle modules, or on other compute modules, they
+all depend on a common interface, the central message
+signalling bus.
+The central bus then eases testing of the module, and
+replacing its dependencies with alternate versions.</p>
+<p>Testing the oracle modules is not as straightforward,
+since we would need to somehow emulate the outside world
+that the oracle modules talk to.
+However, it <em>is</em> acceptable, in this context, to
+use &ldquo;testing on the field&rdquo; i.e. just test oracle
+modules by running CLBOSS on a live system.
+Oracle modules tend to have much, much simpler code, they
+are effectively &ldquo;just&rdquo; translators between the
+outer world and the inner <code>S::Bus</code> world.
+If something happens on the node that is supposed to be
+noticed by the oracle module, and it does not emit a
+message (i.e. none of the already-well-tested compute
+modules react to the event) then we know it is the
+oracle module at fault, and scanning through the code of
+the oracle module is usually sufficient since the oracle
+module is typically a straightforward translator.</p>
+
+<h1>Non-idealities</h1>
+<p>The described architecture was developed during the
+development of the actual CLBOSS program itself.
+This means that some code in CLBOSS was written before
+some of the architecture had been solidified.</p>
+<p>For example, the central bus, and the dependency
+inversion it represents, implies that modules should
+<em>not</em> have references or pointers to other
+modules.
+Modules should have references or pointers to (i.e.
+depend on) only the abstract bus, not on any concrete
+modules.</p>
+<p>However, the <code>Boss::Mod::Rpc</code> module was
+written before this part was extended to all parts of
+the overall design.</p>
+<p>The <code>Boss::Mod::Rpc</code> module exposes
+the <code>.command()</code> member function, which
+is accessible only via a direct reference to the actual
+module.
+Thus, modules that want to send RPC commands to the
+C-Lightning node being managed have to acquire a
+pointer to the RPC object.</p>
+<p>A better design would have messages to initiate an
+RPC command, and a message to represent the RPC command
+result, and have the <code>Boss::Mod::Rpc</code> instead
+listen for those messages over the bus.
+The convenience of the <code>.command()</code> member
+function can be reacquired by implementing a
+&ldquo;proxy&rdquo; in the <code>Boss::ModG</code>
+namespace; any RPC-using module could then instantiate
+this proxy, which would provide a <code>.command()</code>
+member function that emits the do-this-RPC-command
+message and listens for the corresponding result.</p>
+<p>This would make some &ldquo;oracle&rdquo; modules
+into &ldquo;compute&rdquo; modules, since they can
+now be tested independently of the real
+<code>Boss::Mod::Rpc</code>, due to the dependency
+decoupling.
+It would also allow other modules to introspect on
+what commands are being sent by the rest of CLBOSS,
+by simply listening for the RPC messages on the bus.</p>
+
+</div>
+
+<div class=footer>
+<p>&copy; 2022 ZmnSCPxj.  Released under CC-BY.</p>
+<iframe src='../donation.html' frameborder=0 width='100%' />
+</div>
+
+</body>
+</html>
+
+
