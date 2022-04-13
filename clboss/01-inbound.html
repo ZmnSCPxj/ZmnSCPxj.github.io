@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang=en>
+<head>
+<meta charset=utf-8>
+<title>Inbound Liquidity Via Offchain-to-Onchain Swap; CLBOSS</title>
+</head>
+<body>
+
+<div class=header>
+<p><a href='../index.html'>ZmnSCPxj</a> &raquo; <a href='index.html'>CLBOSS</a> &raquo; Inbound Liquidity Via Offchain-to-Onchain Swap</p>
+</div>
+
+<div class=content>
+<p>Updated: 2022-04-13</p>
+<h1>Introduction</h1>
+<p>This writeup is of interest to node operators and Lightning
+Network wallet end-users, even those without programming
+experience.</p>
+<p>Inbound liquidity is, somehow, always a concern for the
+Lightning Network.
+It is trivial for a new node to get outbound liquidity by
+simply allocating some onchain funds to new channels to the
+rest of the network.
+But for some reason, it is apparently a difficult task to
+acquire inbound liquidity.</p>
+<p>Or in other words, it is easy for a new LN wallet to
+<em>send</em> funds, but hard for a new LN wallet to
+<em>receive</em> funds.
+Somehow, an LN wallet has to get this thing called
+&ldquo;inbound liquidity&rdquo; in order to actually
+<em>receive</em> funds.</p>
+
+<h1>Non-CLBOSS Solutions</h1>
+<p>The market around LN has come up with a few solutions
+to this problem:</p>
+<p><ul>
+ <li>Custodial wallets.
+     An expert node operator contacts other, existing
+     nodes to request incoming liquidity from them, or
+     otherwise acquire incoming liquidity on their own
+     node.
+     Then that operator sells the LN wallet service (both
+     outbound and inbound liquidity) of their node to
+     end-users, in exchange for knowledge of all their LN
+     payments, and the irrevocable and very transferable
+     right to steal all their LN funds at any time.</li>
+ <li>LSPs offering services to make channels to new
+     LN wallets and give them incoming liquidity.
+     This service can be paid for explicitly by charging a
+     direct fee for the incoming liquidity, <em>or</em>
+     implicitly by requiring an unpublished (often called
+     oxymoronically as &ldquo;private&rdquo;) channel
+     (thus getting knowledge of all LN sends and receives
+     via that channel, as per axiom of terminus),
+     <em>or</em> again implicitly by charging usurious
+     offchain feerates for use of the channel.</li>
+</ul></p>
+<p>The above solutions usually have negative implications
+for the privacy and security of your LN funds and fund
+transfers.</p>
+<p>More recently (mid 2022), Lisa Neigut has been designing
+dual-funding, also known as &ldquo;openchannelv2&rdquo;.
+This largely makes the LSP-solution above much easier.
+The dual-funding protocol also includes the liquidity ads
+sub-proposal, which further facilitates the above
+LSP-solution.
+Liquidity ads encourages the explicit charge for a published
+channel rather than implicit fees from reselling information
+extracted from unpublished (laughably known as
+&ldquo;private&rdquo;) channels, or charging usurious
+feerates.</p>
+<p>Fundamentally speaking, we can consider both approaches
+as &ldquo;selling inbound liquidity&rdquo;.
+The sellers of the inbound liquidity are able to acquire
+inbound liquidity for their own nodes, and then let you
+purchase the use of that inbound liquidity.
+Typically, this inbound liquidity is acquired wholesale by
+direct dealings with operators of large published nodes,
+often operated or owned by existing Bitcoin whales.
+The inbound liquidity is then resold at retail to smaller
+individual end-users.</p>
+<p>However, it is a better proposition for the inbound
+liquidity to be sold for a monetary fee, then to pay using
+your information.
+Information about you can be used to manipulate and
+control you in order to extract tribute from you later.
+Thus, solutions that involve end users paying for incoming
+liquidity by sacrificing their information should be
+avoided.</p>
+
+<h2>Non-Custodiality And Privacy</h2>
+<p>TLDR: non-custodial wallets that always connect to a
+fixed LSP (or set of LSPs) are still no good in terms
+of keeping your information safe, though as non-custodial
+they do keep your actual funds safe.
+The rest of this subsection is deeply technical.</p>
+<p>Some developers of non-custodial LN wallets have
+considered setting up their own LSP, and having their
+non-custodial LN wallets always connect to that LSP.
+The idea is that the developers also get their
+inbound liquidity wholesale and then provide it
+&ldquo;for free&rdquo; to end-users, while using
+non-custodial techniques so that their node never holds
+end-user funds.</p>
+<p>However, if your non-custodial wallet always connects
+to one or more LSP(s) run by a single entity, then you
+are paying for its services using your information:
+the LSP knows that all transfers on your channels with
+it are your activity, because your non-custodial wallet
+<em>cannot</em> connect to anyone else.
+(If the wallet can in theory connect to &ldquo;your own
+node!&rdquo; then just run your own published node and
+use a mobile remote control UI to that published node,
+instead of controlling your own node by tying up more
+Bitcoins into a channel from your mobile non-custodial
+wallet, which you own, to your own node, which you also
+own, so all transfers between them are of null utility
+since you own both nodes anyway, so just use a remote
+control instead and avoid tying up more funds.)</p>
+<p>No amount of promising from these developers can
+truly protect your information.
+In particular, with the LN as of mid 2022, it is
+impossible to delete the information even if the
+operators really really really want to: Poon-Dryja
+channel operators <em><strong>MUST</strong></em> keep a
+copy of every HTLC that ever existed on a channel,
+otherwise old state could have an old HTLC that cannot
+be retrieved since the hash and timelock details are
+not known.
+The HTLC data can only be safely deleted if the channel
+is closed (at which point you lose access to the LN).
+You might trust them <em>now</em>, but their values may
+change in the future, they or their employer may be
+bought out by some entity with very different values,
+their LSP can be hacked and the information stolen,
+etc.</p>
+<p>In theory the non-custodial LN wallet developers
+could release the code for their LSP so that anyone
+<em>else</em> can run an LSP as well.
+While better than fixing your non-custodial wallet to
+use LSP(s) from a single entity, we should compare
+this to the situation with Electrum servers.
+Electrum servers do <em>not</em> require that the
+server operators lock up funds for the Electrum server,
+so it is far easier for a random nameless volunteer to
+run one, whereas LSPs should be large published nodes
+or else their capacity may be overwhelmed.
+LSPs need to somehow acquire the inbound liquidity
+wholesale (again, often by directly dealing with other
+large published nodes) that they will provide to the
+end-users.
+It is certainly possible to do so, but the barriers
+are higher than for Electrum servers, and the
+undeletable log data is still a problem.</p>
+
+<h1>Inbound Liquidity Via Offchain-to-Onchain Swaps</h1>
+<p>During the blocksize debate, one of the points against
+the Lightning Network, and therefore the smallblock
+strategy, was this:</p>
+<blockquote>
+<p>Largeblocker: LN channels start in one direction only
+and you cannot receive by it!
+That sucks!</p>
+<p>Smallblocker: Well, if you send out funds first, then
+you get inbound liquidity so you can then receive
+afterwards.</p>
+<p>Largeblocker: So I have to spend first before I can
+receive??
+Nice UX, LN!
+What if I am not interested in spending my Bitcoins, I
+just want to buy more Bitcoins so I have to receive it?</p>
+</blockquote>
+<p>However, an important key insight was this:</p>
+<blockquote>
+<p>Smallblocker: 1 BTC = 1 BTC.
+You can spend Bitcoins on the Lightning Network to buy
+an equivalent amount of Bitcoins on the blockchain, which
+gets you inbound liquidity (due to sending out the funds
+over the channel), while still keeping your Bitcoins as
+Bitcoins.</p>
+</blockquote>
+<p>Basically, you use an offchain-to-onchain swap service,
+such as Boltz Exchange or Lightning Loop, and because you
+send out funds over the LN, you get inbound liquidity.
+At the same time, you can then take the onchain Bitcoins
+and lock them into new channels, to return the same amount
+into a readily-spendable outbound liquidity.</p>
+<p>This has several advantages:</p>
+<p><ul>
+ <li>If you contact the swap service over Tor, and mix the
+     received onchain coins using CoinJoin or CoinSwap, then
+     the swap service cannot identify which node on the
+     network is using their service to get inbound liquidity,
+     thus cannot resell your information.</li>
+ <li>You are not tied to specific LSPs, and you can connect
+     channels to <em>any</em> published node on the network.
+     This improves your decentralization and resilience, as
+     there are far more published nodes than there are LSPs
+     that sell inbound liquidity.</li>
+ <li>You are distant from the swap service you are buying
+     the inbound liquidity from, unlike the case of an LSP
+     which <em>must</em> be your peer.
+     The swap service is effectively transferring their
+     inbound liquidity to you, not leasing their inbound
+     liquidity (like in the LSP case).
+     Once you have purchased the liquidity, the liquidity
+     of the swap service no longer matters to you, and even
+     if the swap servie manages to lose all inbound liquidity,
+     you can still receive since you are distant from the
+     swap service.
+     Compare this to the LSP case, where if the LSP manages
+     to lose inbound liquidity, even if you have channels
+     with the LSP where the LSP can send to you, if the LSP
+     itself cannot receive from the rest of the network, it
+     cannot forward to you and you cannot receive via that
+     LSP since it is your broker to the rest of the network.</li>
+ <li>You can do this manually using e.g. the Boltz Exchange
+     website, even if your LN wallet does not support it
+     directly.</li>
+</ul></p>
+<p>Strangely, this technique seems to be underutilized.
+To my knowledge (mid 2022), only the Electrum LN wallet has
+direct support for this technique, and provides a convenient
+button on its UI to perform a swap for the purposes of
+getting inbound liquidity.
+CLBOSS also uses this technique to buy inbound liquidity,
+and does so automatically when it judges that the node under
+management has insufficient inbound liquidity.
+People are somehow amazed at how CLBOSS can
+&ldquo;magically&rdquo; get balanced channels with good
+inbound and outbound liquidity, yet this technique can be
+done perfectly manually and is very simple, both in concept
+and execution.
+CLBOSS just adds automation to do this technique without
+user intervention.</p>
+<p>The technique is not perfect.
+You need Bitcoins to first create channels, then reverse the
+direction of the channels via this offchain-to-onchain swap
+technique, then create new channels to put your onchain
+funds back offchain.
+Typically, wallet developers wnat to demo their wallet by
+first sending to prospective end-users some nominal amount
+of funds, then show that it can be spent.
+But this case can be handled by 0-conf <code>push_msat</code>
+channels, and once you have a channel, you can reverse its
+direction using this technique.</p>
+<h2>Swap Service Point-of-View</h2>
+<p>We might wonder about the point-of-view of the swap
+service.</p>
+<p>As far as the swap service knows, it is selling onchain
+Bitcoins for offchain Bitcoins.</p>
+<p>However, we should note that in order to <em>receive</em>
+offchain Bitcoins over Lightning, the swap service itself
+has to have its own inbound liquidity.</p>
+<p>When the inbound liquidity is then subsequently used up
+during the buying of onchain Bitcoins, then the swap service
+has to somehow acquire new inbound liquidity and new onchain
+Bitcoins.</p>
+<p>How the service does so, will depend on the operators of
+the service.
+The swap service may have deals with other large LN node
+operators to get inbound liquidity, and deals with miners
+to get onchain Bitcoins.</p>
+<p>Basically, this operation transfers the inbound liquidity
+of the swap service over to the inbound liquidity of the
+user of this technique.
+The surcharge the swap service imposes then is the fee for
+the purchase of this inbound liquidity.
+Like in the LSP case, the node acquires inbound liquidity
+wholesale, and then sells it at retail to end-users.</p>
+<p>A difference between the swap service and the LSP case,
+as noted above, is that the LSP is really renting out its
+inbound liquidity to its clients.
+For example, if the LSP has 1 BTC in inbound liquidity to
+the rest of the network, it could offer 1 BTC of liquidity
+to one client and <em>also</em> 1 BTC to another client.
+It is gambling that the clients will not simultaneously
+require the inbound liquidity, because if both of them
+try to use the full, sold capacity of 1 BTC, then the
+actual lack of liquidity of the LSP will prevent them from
+receiving.</p>
+<p>With the swap service instead, the swap service cannot
+sell inbound liquidity it does not have.
+If the swap service has only 1 BTC of inbound liquidity,
+then if one client purchases that 1 BTC of inbound liquidity
+(by paying it for onchain Bitcoins, which converts the
+client outbound liquidity to inbound liquidity and the swap
+service inbound liquidity to outbound liquidity) then the
+swap service cannot sell the same 1 BTC of inbound
+liquidity to another client later, since it no longer has
+any inbound liquidity to sell.</p>
+<p>With the use of a swap service rather than an LSP, the
+clients do not need to audit the inbound liquidity of
+the swap service, whereas with the LSP, the clients need
+to monitor and audit the inbound liquidity of the LSP.
+Unfortunately, the liquidity of the LSP represents private
+information of the LSP, and it is unsafe for the LSP to
+share this information.</p>
+<br />
+<p><img src='01-inbound-lsp-example.svg' /></p>
+<p>1) LSP sells 2 BTC of inbound liquidity, despite only
+having 1 BTC of inbound liquidity.
+2) Client 1 consumes its 1 BTC of inbound liquidity,
+which also consumes the 1 BTC of inbound liquidity of
+the LSP.
+Client 2 <em>thinks</em> it still has 1 BTC of inbound
+liquidity, but actually cannot receive except from
+Client 1.</p>
+<br />
+<p><img src='01-inbound-swap-example.svg' /></p>
+<p>1) Client 1 and Client 2 connect to the Lightning Network,
+where Swap is offerring an offchain-to-onchain swap service.
+2) Client 1 outright purchases the available inbound liquidity
+from Swap.
+Client 2 is unable to purchase the inbound liquidity from
+Swap, but <em>knows</em> it has no inbound liquidity.
+Client 2 can choose to use a different Swap service, without
+having to close the existing channel it already made.</p>
+<br />
+<h2>CLBOSS Swap Decisionmaking</h2>
+<p>CLBOSS is an automated manager, so it has to have
+<em>some</em> policy on when to trigger a swap.
+In CLBOSS as of this writing (mid 2022) there are two
+conditions that would cause an offchain-to-onchain swap.</p>
+<p><ul>
+ <li><code>Boss::Mod::NodeBalanceSwapper</code>: triggers
+     by comparing the inbound liquidity versus the total
+     of the inbound and outbound liquidity.
+     If the inbound liquidity is less than 30% of the total,
+     and onchain fees are low, it triggers a swap.
+     If the inbound liquidity is less than 2.5% of the total,
+     it triggers a swap even if onchain fees are high.
+     This always sends out 2/3 of the difference between
+     outbound and inbound liquidity.</li>
+ <li><code>Boss::Mod::NeedsOnchainFundsSwapper</code>:
+     triggers when a small amount of onchain funds is
+     detected, but the amount is too small for a feasible
+     practical channel.
+     This will typically occur if for example a channel
+     needs to get closed, and only a small amount of money
+     happens to be on our side of the channel-to-close.
+     Rather than HODL this money onchain, CLBOSS will
+     try to make an offchain-to-onchain swap to get more
+     onchain funds, and form a new, larger channel.
+     This only triggers if onchain fees are low.</li>
+</ul></p>
+<p>The main policy that buys inbound liquidity is the
+<code>NodeBalanceSwapper</code> module.
+However, <code>NeedsOnchainFundsSwapper</code> will,
+effectively, preemptively buy inbound liquidity to
+match a planned outbound liquidity when we later build a
+new channel to the network.</p>
+<h2>CLBOSS Swaps</h2>
+<p>The swap system of CLBOSS has sufficient abstraction
+that it can use any number of protocols to talk with the
+swap service.
+It also has the ability to use any number of actual
+swap services.</p>
+<p>However, as of this writing (mid 2022), only one
+protocol is used, the Boltz protocol.
+This is because the Boltz API is well-documented.</p>
+<p>It would be nice to also support using the
+Lightning Labs Lightning Loop.
+However, it has the disadvantage that the client-server
+API is undocumented other than the client Go code, and
+there is no open-source implementation of the server,
+only the client.
+Boltz has released an open-source server code as
+well, so in theory anyone can start up a new Boltz
+server.</p>
+<p>As noted, CLBOSS can use multiple swap services of
+various protocols.
+In particular, the open-source Boltz server means
+that in theory multiple servers, run by different
+entities, can arise which use the same protocol.
+The CLBOSS code includes two swap services that both
+use the Boltz protocol: the Boltz server itself, and
+one run over a hidden service by AutonomousOrganization.
+However, the latter service appears to be moribund,
+and may be removed at some point in the future.</p>
+<p>I encourage others to deploy new swap services,
+rather than LSPs.</p>
+<p>CLBOSS immediately sends onchain funds directly
+to the node under management.
+This means that the swap service can learn who is
+using its services by simply observing the blockchain
+and seeing the funds it sent out onchain being spent
+into channels of a specific node.
+At some point in the future, it would be nice to add
+the option to use some kind of CoinJoin or CoinSwap
+service to separate the funds from the swap service,
+and prevent the swap service from reselling that
+information.
+In particular, an LSP <em>has to</em> know your
+node in order to give you inbound liquidity, while
+at least with a swap service, there is a way for
+you to hide your node from the swap service, it
+just has not been implemented on CLBOSS yet
+(mid 2022).</p>
+<p>Even with the lack of privacy against swap
+service in practice (since CLBOSS does not yet
+use an anonymizing layer to protect your identity
+from the swap service), there is still a slight
+advantage.
+The swap service will learn your node after-the-fact,
+when it has already given you the inbound liquidity,
+and once it has learned your node, cannot revoke that
+inbound liquidity it has given to you.
+The LSP has to know your node before-the-fact and
+can deny you the inbound liquidity in the first
+place, <em>and</em> can close the channel
+after-the-fact if it changes its mind about you.</p>
+
+<hr />
+
+<h1>Addendum: &ldquo;Private&rdquo; Channels Are Not Private: Unpublished Channels Delenda Est</h1>
+<p>Commonly referred to by the misnomer &ldquo;private
+channel&rdquo;, unpublished channels leak your every
+offchain send and receive to your counterparty.</p>
+<p>The reason for this is simple: only those who know
+the channel can use it for their payments.</p>
+<p>If your channel is unpublished, then only two
+people know the channel: you and your LSP.</p>
+<p>If the channel has activity, and the LSP is not
+the one that triggered that activity, then by process of
+elimination, it knows that <em>you</em> are the one
+using the channel for that activity.
+After all, only the two of you know the channel.
+In that case, it can assign with 100% probability
+those activity to you, and resell that information
+to others.</p>
+<p>If you value your privacy and your right to not
+have your information resold, then use published
+channels.</p>
+<p>Now you might quibble and say &ldquo;yes but I
+could use the unpublished channel in an invoice so
+the channel is now known by another entity&rdquo;.
+But if you are going to rely on that, <em>just publish
+the channel outright in the first place</em>.
+That increases your anonymity set to &ldquo;all
+LN users&rdquo;.</p>
+<p>The axiom of terminus is just the observation
+that an unpublished channel can only be used at
+the start or the end of a payment route, and not
+at any intermediate hop.
+Thus, any observer along the route who sees a
+multihop payment route from or to an unpublished
+channel knows immediately that the route starts
+or stops at the node at the other end.
+This is just a reformulation of the above
+observation, that an unpublished channel is
+known only by two entities and if one entity
+sees activity and knows it is not using the
+channel, obviously the activity was from the
+other entity.</p>
+
+</div>
+
+<div class=footer>
+<p>&copy; 2022 ZmnSCPxj.  Released under CC-BY.</p>
+<iframe src='../donation.html' frameborder=0 width='100%' />
+</div>
+
+</body>
+</html>
+
+
