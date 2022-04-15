@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang=en>
+<head>
+<meta charset=utf-8>
+<title>Handling Connections; CLBOSS</title>
+</head>
+<body>
+
+<div class=header>
+<p><a href='../index.html'>ZmnSCPxj</a> &raquo; <a href='index.html'>CLBOSS</a> &raquo; Handling Connections</p>
+</div>
+
+<div class=content>
+<p>Updated: 2022-04-15</p>
+
+<h1>Introduction</h1>
+<p>This writeup is of interest primarily to node operators.
+Though some programming is mentioned, even those without
+programming experience should be able to gather useful
+information from this writeup.</p>
+<p>In order to participate in the Lightning Network, your
+node must first be able to actually <em>connect</em> to the
+network.</p>
+<p>This writeup will discuss three CLBOSS tasks related to
+connecting to the Lightning Network:</p>
+<p><ul>
+ <li>Tracking Internet connectivity.</li>
+ <li>Connecting to Lightning Network peers.</li>
+ <li>Disconnecting from Lightning Network peers.</li>
+</ul></p>
+<p>Note that this writeup will talk about <em>connecting</em>
+to peers, and <em>not</em> making channels to them.
+CLBOSS separates the two concepts.
+First, the node needs to connect to the network so that the
+node can perform an initial download of the network map.
+Then when the map is available, other algorithms will
+figure out where to make channels to.</p>
+<p><em>This</em> writeup is about the connecting to the
+network, not about opening channels to the network.
+This distinction is vital to some of my goals for CLBOSS.</p>
+
+<h1>Internet Connection Tracking</h1>
+<p>Before we can connect to other nodes on the network, we
+need to be connected to the Internet.</p>
+<p>In particular, CLBOSS also monitors our channel peers for
+their uptime, and may optionally close channels with peers
+whose uptime is very low.
+However, if it is <em>us</em> that actually has no
+Internet connectivity, CLBOSS should discount the apparently
+low uptime of our peers, since their perceived uptime will be
+low due to us not being able to contact them, because it is
+<em>us</em> that is actually down.</p>
+<p>Just because the CLBOSS is running, presumably as a plugin
+of some C-Lightning node, does not mean that the Internet
+connection is working.
+If your ISP is like mine, then sometimes you just get no
+service at all for no reason.
+Thus, CLBOSS also monitors the Internet connectivity, not
+just its own uptime.</p>
+<p>The <code>Boss::Mod::InternetConnectionMonitor</code> is the
+module responsible for checking Internet connectivity.
+Every 10 minutes, it performs a series of tests in order to
+determine if the Internet is accessible.
+If one test succeeds, then we consider ourselves to be
+online.
+Otherwise, it proceeds to the next test.</p>
+<p><ol>
+ <li><p>If there is at least one connected peer, then select
+        one at random and send a Lightning-level <code>ping</code>
+        to it.
+        If it responds within 30.0 seconds, we consider ourself
+        to be online.
+        Otherwise if <code>ping</code> fails (for example if
+        the peer disconnected between when we saw it in the list
+        of peers and when we send the <code>ping</code> request,
+        i.e. time-of-check-vs-time-of-use race), or we reach the
+        30-second timeout, we assume this test fails and
+        proceed to the next test.</p>
+     <p>The Lightning BOLT protocol has its own <code>ping</code>
+        message, which should be responded to by a Lightning BOLT
+        protocol <code>pong</code> message.
+        This is different from the ICMP-level <code>ping</code>
+        you might be familiar with.
+        C-Lightning exposes a <code>ping</code> command on the
+        <code>lightning-rpc</code>, which is what CLBOSS
+        uses.</p>
+     <p>Nodes are not obligated to respond to
+        <code>ping</code> requests, so this potentially
+        could hang indefinitely.
+        Thus, the 30-second timeout.</p>
+     <p>Due to the way Internet packets work, our local OS
+        might assume the connection is still live, but if
+        no activity occurs on the connection, it might
+        already be disconnected without our local OS
+        realizing it.
+        Sending an application-level <code>ping</code>
+        allows us to notice this.
+        If the selected peer is properly coded (such as C-Lightning)
+        then it should be able to respond to <code>ping</code>
+        messages with a <code>pong</code> in a few dozen
+        milliseconds.
+        If it instead times out, it is likely that the connection
+        has gotten interrupted somewhere.</p></li>
+ <li><p>Select one of a hardcoded set of https servers,
+        including popular sites such as <code>www.google.com</code>
+        and <code>www.alibaba.com</code>, which are unlikely
+        to ever go offline, then try to connect to them.
+        If we can connect, we consider ourselves online, otherwise
+        we move to the next attempt below.</p>
+     <p>CLBOSS only does the TCP-level connect to the port,
+        but drops the connection as soon as it is established,
+        to reduce load on the target server.
+        We do not even start SSL tunnel handshaking, just the
+        TCP-level connection establishment is enough for us to
+        consider ourselves online.
+        Connection is done over a proxy if the C-Lightning node
+        has a proxy configured (and C-Lightning assumes the
+        proxy is Tor, which CLBOSS also assumes);
+        this improves the privacy of the node under management
+        if it is configured with a Tor proxy.</p>
+     <p>Because we want to support using a (Tor) proxy as above,
+        we cannot use an ICMP-level <code>ping</code>.
+        The proxy C-Lightning supports is SOCKS5h, meaning it
+        can do a standard DNS lookup and do a connect to a
+        hostname or IP address, but cannot do an ICMP-level
+        <code>ping</code> via proxy (and Tor, which is the
+        proxy we expect to use, does not support this at the
+        Tor protocol level).
+        Besides, ICMP access requires root on most Unixen, and
+        we <strong>really</strong> do not want CLBOSS to run
+        root.
+        We <em>could</em> call into the system <code>ping</code>
+        command, but what if it is not installed, also the
+        <code>ping</code> command output has no standard (various
+        OSs will have various conventions for its output and
+        flags).</p>
+     <p>We just want to check that we can connect to the Internet,
+        not DoS the listed servers.
+        Thus, we <em>frst</em> try to <code>ping</code> one of
+        our peers, above, before we fall back to trying to
+        connect to a hardcoded server.
+        We also try only one of the servers listed, to distribute
+        the load among them; as of this writing (mid 2022) we have
+        about two dozen servers hardcoded.<em></em></p></li>
+ <li><p>If the above selected server fails, we then try <em>all</em>
+        the hardcoded servers.
+        If we can connect to <em>any</em> of them, we consider ourselves
+        online.</p>
+     <p>If we are really disconnected from the Internet, then trying
+        all the hardcoded servers will not affect any of them (because
+        <em>we</em> are offline), so this is not a DoS attack, either.</p>
+     <p>However, there is a tiny probability that one of these hugely
+        popular servers is down, but the rest of the Internet is
+        somehow still accessible to us.
+        It is also possible that the local ISP or government or whatever
+        of the node under management wants to censor one of these
+        servers, but the rest of the Interent is still accessible.
+        Hence this fallback.</p></li>
+</ol></p>
+<p>Note that the above tests are done every 10 minutes if
+we think we are online.
+If we think we are offline, we do the tests every 5 seconds
+instead; if we are really offline, then checking every 5
+seconds is not a DoS attack since we are offline.
+However, this lets us know much more quickly if we are online.</p>
+<p><code>Boss::Mod::InternetConnectionMonitor</code> will then
+broadcast <code>Boss::Msg::InternetOnline</code>.
+This messsage has a single <code>.online</code> field, which is
+<code>true</code> if we are online and <code>false</code> if we
+are offline.
+This message is sent only if we changed from offline to online,
+or online to offline; we assume at CLBOSS startup that we are
+offline, and also do a check as soon as CLBOSS starts up, in case
+we are actually online.
+Other modules will then listen for the
+<code>Boss::Msg::InternetOnline</code> message and update their
+own local variable tracking onlineness.</p>
+<p>If we moved from offline to online, then
+<code>Boss::Mod::InternetConnectionMonitor</code> will also
+broadcast <code>Boss::Msg::NeedsConnect</code>.
+Due to CLBOSS starting with the state &ldquo;offline&rdquo;
+and then immediately checking if we actually have Internet
+connectivity, this behavior also handles the case where a new
+CLBOSS is set up to manage a C-Lightning node.</p>
+</p>This leads to the next section, where we describe how we
+select nodes to actually connect to.</p>
+
+<h1>Connecting to Lightning Network Nodes</h1>
+<p>In order to <em>channel</em> to the network, first we have
+to <em>connect</em> to the network.</p>
+<p>Connecting to the network allows us to get the very
+important network map via the gossip protocol.
+Without the map, we cannot route payments, and more
+importantly, the network map is one of the resources we
+use to discover nodes we want to make channels to.</p>
+<p>The <code>Boss::Mod::NeedsConnectSolicitor</code> module
+reacts to the <code>Boss::Msg::NeedsConnect</code> message.
+As of this writing (mid 2022) this message is broadcast in
+two conditions.
+One of them was described in the previous section: it is
+raised when we move from &ldquo;offline&rdquo; to
+&ldquo;online&rdquo;.
+The other will be described in a subsection.</p>
+<p>When <code>Boss::Mod::NeedsConnectSolicitor</code>
+finds that we need to connect, it <dfn>solicits</dfn>
+for connection candidates on the bus.
+This means it broadcasts a message on the bus, which
+other modules should respond to by broadcasting a
+providing moessage.
+This allows the soliciting module to be extended in
+the future by adding new modules that provide
+information to the soliciting module.</p>
+<p><code>Boss::Mod::NeedsConnectSolicitor</code>
+broadcasts a <code>Boss::Msg::SolicitConnectCandidates</code>
+message to solict potential connection candidates from
+other modules, then processes
+<code>Boss::Msg::ProposeConnectCandidates</code> messages
+from other modules, adding them to a set of candidates.</p>
+<p>Then it takes this set of candidates and shuffles them,
+distributing them into two queues.</p>
+<p>It then processes both queues, trying candidates one at a
+time.
+If we are able to connect to a candidate, we finish processing
+for that queue.
+Otherwise, we move to the next candidate on the queue.</p>
+<p>As of this writing (mid 2022), the following modules
+propose candidates:</p>
+<p><ul>
+ <li><code>Boss::Mod::ConnectFinderByHardcode</code> &mdash;
+     propose two nodes at random from a hardcoded list of
+     nodes.</li>
+ <li><code>Boss::Mod::ConnectFinderByDns</code> &mdash;
+     selects a BOLT 10 DNS server from a harcoded list,
+     then proposes the list of nodes and IP addresses the
+     DNS server provides.</li>
+</ul></p>
+<p>These have important privacy concerns and eclipsing
+concerns.</p>
+<p>If we rely only on the DNS servers, we should note that
+there are only a small number of entities running BOLT 10
+DNS servers.
+It is thus possible for all of them to be taken over so
+that the servers return only nodes from a curated list,
+effectively eclipsing the real network and censoring the
+Lightning Network.
+Thus, we also rely on a hardcoded list of nodes, in the
+hope that even if the DNS servers are taken over, perhaps
+one or more of the hardcoded list is not taken over.</p>
+<p>Of course, since CLBOSS is open-source, someone who
+wants to eclipse the network could also look at the
+open-source hardcoded list of nodes, <em>and</em>
+target them for takeover.
+I have thus taken the effort to find nodes from various
+countries, with various political systems, so that it is
+difficult to take all of them over.
+Nodes in Western democracies still dominate the list,
+however.</p>
+<p>Sometimes a node on the list shuts down permanently.
+Thus, once or twice a year I go over the list and try
+to connect to them manually.
+If they are offline, I remove them from the list.
+Then I add more nodes on this hardcoded list.</p>
+<p>Most ISPs have awful default DNS resolvers.
+For example, <code>lseed.darosior.ninja</code> is often
+unusable from my ISP default DNS resolver.
+For this reason, I also hardcode a reliable DNS resolver
+together with the actual BOLT 10 DNS server.</p>
+<p>A problem here is that the DNS resolver you use gets
+to know your IP address.
+Thus, if a Tor proxy is configured, we use DNS-over-TCP,
+and use the <code>torify</code> command to wrap TCP
+access over Tor.
+Note that Tor itself only supports TCP transport, so we
+have to specifically use DNS-over-TCP, and not whatever
+UDP-based protocol DNS uses by default (I know less about
+DNS than I ever thought I did).</p>
+<h2>The Reconnector</h2>
+<p>Most node software, it seems, expect connections to be
+&ldquo;used&rdquo;, by which they mean that they expect
+channels to be made some time after you connect to them.
+If you connect to them, but after some time, do not make a
+channel, they will disconnect.</p>
+<p>However, it is important for CLBOSS to not become a
+<dfn>kingmaker</dfn>, i.e. if many people start run CLBOSS
+near-simultaneously, no single node on the network should
+suddenly get more unmerited channels and / or payment
+traffic, as that hurts decentralization and makes the
+position of such a &ldquo;king&rdquo; into a target for
+those who want to monitor or control the Lightning Network.
+Thus, just because CLBOSS, for example, hardcodes some
+node in its list of nodes, it should not have special
+bonuses in being considered up for channelling.</p>
+<p>This means that
+<code>Boss::Mod::ConnectFinderByHardcode</code> is likely
+to connect to a node, but the rest of CLBOSS will decide
+not to make a channel with it after all (since the
+hardcoded nodes should not be promoted more to avoid
+becoming a kingmaker).</p>
+<p>If that node then decides that you not making a
+channel with them means they should disconnect from
+you, then a CLBOSS-managed node can end up with no
+connections, returning us back to our pre-managed
+state where C-Lightning just sits there twiddling its
+thumbs.</p>
+<p>Thus, CLBOSS has the <code>Boss::Mod::Reconnector</code>
+,odule.
+This module simply listens for disconnection notices from
+the node under management, and then checks if the node
+has no more connections.
+If the node loses its last connection, it raises the
+<code>Boss::Msg::NeedsConnect</code> message to find more
+nodes to connect to, so that the node always has some
+connections.</p>
+
+<h1>Disconnecting From Lightning Network Nodes</h1>
+<p><em>One</em> purpose for connecting to the network is
+to download an up-to-date gossip map, so that we can run
+our heuristics that use the map as reference in order to
+make channels with.</p>
+<p>However, there are also other reasons for CLBOSS To
+connect.</p>
+<p>A later writeup will delve into more detail, but in
+addition to the
+<code>Boss::Mod::NeedsConnectSolicitor</code> module,
+another module <em>also</em> connects to nodes.
+The purpose for this connection is to determine the
+uptime of other nodes; if we are able to connect to
+such nodes, then we can judge that the remote node has
+high uptime (probably).</p>
+<p>This means in particular that once the node has a
+good amount of the gossip map, CLBOSS will start
+connecting to many nodes, due to checking their uptime.</p>
+<p>However, keeping up-to-date with the gossip, once
+you have already downloaded much of the gossip map,
+should not require more than a few live connections.</p>
+<p>Thus, the <code>Boss::Mod::AutoDisconnector</code>
+module will limit the number of connections.
+This triggers every 10 minutes.
+If there are more than 3 connections without channels,
+then it will select all but three of them at random,
+and disconnect the selected ones.</p>
+<p>Connections to peers <em>with</em> channels are
+ignored by <code>Boss::Mod::AutoDisconnector</code>.
+Connections to those peers are needed to keep up to
+date with the status of the channel, and to be
+ready for any forwards via that channel.</p>
+<p>The combination of
+<code>Boss::Mod::Reconnector</code> and
+<code>Boss::Mod::AutoDisconnector</code> ensures that
+the node has between 1 to 3 connections to nodes that
+it has no channels with, which helps propagate gossip.
+This is important in case your peers-with-channels
+are trying to do an eclipse attack on you and trying
+to prevent knowledge about some node from you (for
+example, if somebody actually owns a large number of
+nodes on the network, and wants to redirect payments
+to go through their nodes by denying knowledge of
+gossip about other nodes from your node).
+At the same time, it also keeps the number of
+&ldquo;useless&rdquo; connections (i.e. those without
+channels) low.</p>
+
+</div>
+
+<div class=footer>
+<p>&copy; 2022 ZmnSCPxj.  Released under CC-BY.</p>
+<iframe src='../donation.html' frameborder=0 width='100%' />
+</div>
+
+</body>
+</html>
+
+
