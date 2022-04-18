@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang=en>
+<head>
+<meta charset=utf-8>
+<title>Investigating Channel Candidates (Autopilot Part 1); CLBOSS</title>
+</head>
+<body>
+
+<div class=header>
+<p><a href='../index.html'>ZmnSCPxj</a> &raquo; <a href='index.html'>CLBOSS</a> &raquo; Investigating Channel Candidates (Autopilot Part 1)</p>
+</div>
+
+<div class=content>
+<p>Updated: 2022-04-18</p>
+
+<h1>Introduction</h1>
+<p>This writeup is of interest to Lightning Network developers who
+want to make their own &ldquo;autopilot&rdquo;, but may also be of
+interest to curious node operators who want to know how CLBOSS
+treats nodes for making channels with.</p>
+<p>One of the first things that was automated on the Lightning
+Network was to select nodes on the network and make channels with
+those nodes.
+After all, good liquidity to the rest of the network is vital for
+actual use of Lightning.
+Thus, <code>lnd</code> developers quickly implemented and deployed
+an &ldquo;autopilot&rdquo; that performed this task.</p>
+<p>One can argue that CLBOSS is just the lame attempt of some
+cryptokid wannabe to implement autopilot for C-Lightning instead of
+just contributing to <code>lnd</code> which everyone is using
+anyway.</p>
+<p>Now, one of the things that struck me with most autopilot
+implementations is that they select a node and <em>immediately</em>
+make a channel to it.</p>
+<p>But an important figure of merit is how much uptime the
+selected node actually has.</p>
+<p>Thus, CLBOSS also performs <dfn>investigation</dfn>, where it
+also checks the uptime of the node before it actually makes channels.</p>
+<p>Investigation is separate from selection.
+Various modules propose nodes to make channels with.
+Then the proposals enter investigation.
+It is the latter part, the investigation, which <em>this</em>
+writeup will discuss.</p>
+<p>In CLBOSS, we always periodically run the algorithms to
+<em>select</em> nodes to channel with, even if we have no spare
+onchain liquidity to actually make the channels.
+This is to allow investigation to take its time to determine the
+uptime of nodes.
+We should note in particular that judging uptime is time-consuming
+since we need to continuously check if the candidate is online or
+not; just because it is online <em>now</em> does not mean it
+actually is online &gt;99.5% of the time, you need to check back
+later regularly.
+Selecting nodes from the gossip map is just pure computation in
+comparison to that, and is much less time-consuming.</p>
+
+<h1>Proposals and Patrons</h1>
+<p>When a module wants to propose a channel to a particular node,
+the rest of CLBOSS actually has an important question:
+Why?</p>
+<p>Thus, CLBOSS has a concept of a channel <dfn>proposal</dfn>
+and its <dfn>patron</dfn>.
+The <dfn>proposal</dfn> is the actual node that some module is
+proposing to actually build a channel to.
+The <dfn>patron</dfn> is the reason why we think that the node
+is good to channel to &mdash; i.e. the patron is good for
+some module-specific reason, and the proposal has good
+liquidity to its patron.</p>
+<p>This is important since <em>making</em> a channel to some
+proposal later raises this question: <em>how much do we
+put into the channel?</em></p>
+<p>CLBOSS determines how much to put into a channel to some
+<code>proposal</code> by determining the size of the channel(s)
+between the proposal and its <code>patron</code>.</p>
+<p>Thus, a vital part of all the autopilot algorithms in
+CLBOSS is that every <code>proposal</code> ought to have a
+<code>patron</code>, because the size of the channel to the
+<code>proposal</code> is determined by the size of the channel(s)
+between the <code>proposal</code> and the <code>patron</code>.</p>
+<p>In effect, we consider the <code>patron</code> as a sort of
+proxy for &ldquo;the rest of the Lightning Network&rdquo;.
+If the <code>proposal</code> only has, say, a 20mBTC channel to
+the <code>patron</code>, it is probably risky to put more than,
+say, 10mBTC into a channel with the <code>proposal</code>, since
+it is likely that the liquidity to &ldquo;the rest of the
+Lightning Network&rdquo; would be limited to 10mBTC.</p>
+<p>Now you might say, maybe instead of having a
+<code>patron</code>, just have the proposing module indicate
+the amount that should be put in the channel.</p>
+<p>The problem with that is, as was stated in the Introduction,
+we <em>investigate</em> proposals for their uptime, and uptime
+investigation <em>takes time</em>.
+The time from the initial proposal, to the time we actually
+build the channel, can be several days, weeks, or months.
+During that time, network conditions might have changed, and
+the original proposed amount may no longer be reasonable for
+the current liquidity of the proposed node.</p>
+<p>Thus, having a <code>patron</code> lets us update in case
+the liquidity of the <code>proposal</code> changes in the
+future while we were investigating the proposal.
+When we have some onchain funds that are ready to put into
+channels, we query the liquidity between the
+<code>proposal</code> and its <code>patron</code>, so we
+get the most up-to-date information on how much funds it is
+reasonable to put into the new channel.</p>
+<h2>Patron Matchmaking</h2>
+<p>Modules that want to propose nodes for making channels
+need to provide the proposal together with its patron,
+as mentioned</p>
+<p>However, at least one module is unable to provide a
+patron.
+Thus, the
+<code>Boss::Mod::ChannelCandidateMatchmaker</code> module
+takes such patronless proposals and finds a patron for
+them.</p>
+<p>Now, we have mentioned a few times that CLBOSS will
+investigate proposals continuously.
+Obviously, such proposals-under-investigation need to be
+kept track of, so CLBOSS has a list of them stored
+on-disk.</p>
+<p>When a patronless proposal is brought up, the matchmaker
+will ask for all existing proposals.
+It then shuffles this list of proposals.</p>
+<p>Then, it attempts a <code>getroute</code> from the
+patronless proposal to the existing proposal.
+If a route is found from the patronless proposal to an
+existing proposal, we take the first hop of that route as
+the patron for the previously-patronless proposal.
+If no routes are found, then the module simply drops the
+patronless proposal.</p>
+<h2>Dowsing</h2>
+<p>As mentioned, the reason why we have a
+<code>proposal</code> and a <code>patron</code> is
+because we use the liquidity between them to determine
+how much to put in a channel with the
+<code>proposal</code>.</p>
+<p>CLBOSS calls this computation <dfn>dowsing</dfn>,
+and the module <code>Boss::Mod::Dowser</code> is the
+one that computes dowsing.</p>
+<p><code>Boss::Mod::Dowser</code> works by repeatedly
+performing <code>getroute</code> between the
+<code>proposal</code> and its <code>patron</code>,
+specifying a <code>maxhops</code> parameter.
+The <code>maxhops</code> parameter limits the length
+of paths allowed.
+As of this writing (mid 2022) the limit is 3 hops.</p>
+<p>Then, <code>Boss::Mod::Dowser</code> determines
+the capacity of the returned path.
+This is simply the smallest channel along the path.</p>
+<p>The capacity of the path is then divided by the
+length of the path plus 1.
+For example, if there is a direct channel between the
+<code>proposal</code> and the <code>patron</code>,
+then its capacity is divided in half (route length is
+1, plus 1, thus divide by 2).</p>
+<p>Multiple routes are checked (as of this writing
+(mid 2022) the limit is 10 routes checked), and the
+capacity divided by the route length plus 1 are summed
+up.
+This is then the value returned by the
+<code>Boss::Mod::Dowser</code> to be used as the
+amount to put to a channel with the
+<code>proposal</code>.</p>
+
+<h1>Preinvestigation</h1>
+<p>As a quick check, CLBOSS <dfn>preinvestigates</dfn>
+proposals when they are first broadcast.
+This is simply a quick attempt to connect to the
+<code>proposal</code> node.
+If we fail to connect, we simply drop the proposal.</p>
+<p>Modules should use the
+<code>Boss::Msg::PreinvestigateChannelCandidates</code>
+message to indicate nodes they think are good for
+making a channel with, unless they need to use the
+matchmaker, in which case they should use the
+<code>Boss::Msg::ProposePatronlessChannelCandidate</code>.
+The matchmaker will then emit the preinvestigate
+message on their behalf.</p>
+<p>Notice that the
+<code>Boss::Msg::PreinvestigateChannelCandidates</code>
+message is plural, i.e. it is about preinvestigating
+channel candidate<strong><em>s</em></strong>.
+More specifically, the message contains:</p>
+<p><ul>
+ <li>An ordered list of
+     <code>proposal</code>-<code>patron</code> pairs.</li>
+ <li>A maximum number of passing proposals to add.</li>
+</ul></p>
+<p>The preinvestigator will go over the ordered list
+one by one.
+If a <code>proposal</code> passes preinvestigation, we
+decrement the number of passing proposals to add and
+pass the <code>proposal</code>-<code>patron</code> pair
+to the investigator.
+If the maximum number of passing proposals drops to zero,
+this means the preinvestigator has completed the needed
+number of proposals and the rest of the proposals are
+simply dropped.
+If we reach the last proposal in the list, then we do
+nothing more.</p>
+<p>A proposal passes preinvestigation if we are able to
+successfully connect to the <code>proposal</code>,
+<em>and</em> the dowser result for the
+<code>proposal</code>-<code>patron</code> pair is at least
+5mBTC.</p>
+<p>The preimvestigation stage means that channel selection
+modules do not have to consider uptime explicitly while
+selecting channel candidates.
+The channel selection module simply ranks its candidates
+according to whatever metric it uses, sorts them best first,
+and gives this ordered list of channel candidates to the
+preinvestigator.
+Then the preinvestigator looks for the best N candidates that
+are online right now, so that even if the first ones in the
+metric are somehow low-uptime (since a channel selection
+module might not use a metric that correlates with uptime)
+we give a chance to lower-ranked, but still reasonable, nodes
+that <em>do</em> have good uptime.</p>
+<p>Now, a <em>single</em> connect attempt, like what the
+preinvestigator does, is not an accurate uptime measurement.
+But it <em>is</em> correlated with uptime: a high-uptime node
+is likely to be able to connect even just once, while a
+low-uptime node is likely to fail the connect even if the
+attempt is done just once.
+This is good enough for the <em>pre</em>investigator, since
+any passing proposals will be given to the more in-depth
+investigator.</p>
+<p>Another important point is that investigation gets a
+backseat at a certain phase in the lifetime of the node
+under management.
+Suppose a node operator starts a completely fresh C-Lightning
+node, adds CLBOSS as a plugin, and hands it over several
+hundred millibitcoins.
+If CLBOSS sits around investigating channel proposals for a
+few days before making even a single channel, most operators
+are going to assume CLBOSS is not working and uninstall it.
+So CLBOSS needs to get some channels up, ASAP, even with
+little time to do investigation.</p>
+<p>Investigation is thus an <dfn>online algorithm</dfn>.
+An online algorithm will gets its inputs one-at-a-time, and
+can be queried, at any time, for its output.
+An online algorithm will often be able to give rough
+estimates at first, then when fed more data, will be able to
+give better and more accurate results.
+In the case of investigation, its input is the result of an
+attempt to connect to the proposal under investigation (i.e.
+whether the connect fails or not).
+At any time, we an ask investigation to give its best
+judgment, even though it might not have a lot of data yet.</p>
+<p>As we will see in a later writeup, the initial channel
+selection modules tend to use metrics that correlate well
+with uptime.
+Thus, a quick preinvestigation check is helpful to further
+improve the uptime estimation of the initial channels.
+Once CLBOSS has some channels set up, it has time to
+do more in-depth investigation of other proposals, especially
+since it will use the reverse-the-direction trick using
+offchain-to-onchain swaps (discussed in a previous writeup)
+and will get more onchain funds to put into channels later,
+which our next batch of proposals, now better-investigated,
+will use.</p>
+
+<h1>Investigation</h1>
+<p>Once a proposal has passed through preinvestigation, we
+hand it over to
+<code>Boss::Mod::ChannelCandidateInvestigator</code>.</p>
+<p>The investigator keeps a list of proposals under
+investigation on-disk, in the common CLBOSS database.
+Each candidate entry contains a <code>proposal</code>, a
+<code>patron</code>, and an <code>onlineness</code> score.
+Candidates must have unique <code>proposal</code> nodes.</p>
+<p>The <code>onlineness</code> score starts at 0 and is
+bounded from -3 to 24.</p>
+<p>The investigator primarily triggers on the
+<code>Boss::Msg::TimerRandomHourly</code> message.
+It then gathers up to 8 randomly-selected candidates (or all
+of them if there are less than 8).</p>
+<p>The investigator then starts a connection to each of the
+selected candidate <code>proposal</code>s.
+If connection succeeds, its <code>onlineness</code> is
+increased by one, otherwise the <code>onlineness</code>
+is decremented.
+If a node goes below -3, it is removed from the list of
+candidates.
+If the node goes above 24, then score saturates to 24.</p>
+<p>Later, when CLBOSS detects that we have funds we can
+put into channels, we get all nodes with non-negative
+<code>onlineness</code> scores, sorted from highest to
+lowest score.
+If all available nodes have negative scores, however, we
+instead provide all of them (but still sorted according
+to score).</p>
+<p>In addition, every random-hour, if there are less than
+8 candidates with non-negative <code>onlineness</code>
+scores, we ask channel selection modules to provide more
+candidates.
+Even if there are 8 or more candidates with non-negative
+score, at random, the investigator might also ask for more as
+well, with the probability of asking for more going down
+with more non-negative score candidates.
+On the other hand, if there are more than 32 candidates
+already, we drop one selected at random.</p>
+<p>Investigation is not performed if we are offline
+according to the
+<code>Boss::Mod::InternetConnectionMonitor</code>.
+Otherwise, if we are offline then investigation will
+always fail and we would unfairly demerit the selected
+candidates, when it is actually a problem on our side.
+However, the drop-candidates-if-too-many and
+get-more-candidates behavior still remains triggered
+at the random-hourly trigger even if we are offline,
+as channel selection can be performed offline as long
+as we have already downloaded the gossip map.</p>
+
+</div>
+
+<div class=footer>
+<p>&copy; 2022 ZmnSCPxj.  Released under CC-BY.</p>
+<iframe src='../donation.html' frameborder=0 width='100%' />
+</div>
+
+</body>
+</html>
