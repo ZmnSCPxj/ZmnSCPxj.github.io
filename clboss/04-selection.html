@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang=en>
+<head>
+<meta charset=utf-8>
+<title>Selecting Channel Candidates (Autopilot Part 2); CLBOSS</title>
+</head>
+<body>
+
+<div class=header>
+<p><a href='../index.html'>ZmnSCPxj</a> &raquo; <a href='index.html'>CLBOSS</a> &raquo; Selecting Channel Candidates (Autopilot Part 2)</p>
+</div>
+
+<div class=content>
+<p>Updated: 2022-04-19</p>
+
+<h1>Introduction</h1>
+<p>This writeup is of interest to Lightning Network developers who want
+to make their own &ldquo;autopilot&rdquo;, as well as existing node operators
+who take on the role of node manager as well (a role which CLBOSS seeks
+to take over via automation).</p>
+<p>Strictly speaking, if we had an infinite amount of resources to devote
+to the task, we really only need one combined metric for selecting nodes to
+make channels with.
+This combined metric would weigh details like size of the node, centrality
+of the network, and also importantly, uptime.</p>
+<p>Uptime is a very important metric for a direct channel peer.
+If your peer is offline, then you cannot use any channel you have with it,
+full stop.
+This prevents you from using the channel, whether as a sender, receiver,
+or forwarder.
+If you expect economic activity of any kind (buying products, selling
+products, or selling the service of forwarding) then downtime of your
+direct channel peer represents some amount of economic loss.</p>
+<p>However, to get uptime information, we need to spend network bandwidth
+checking if each node is up or not.
+And there are, as of this writing (mid 2022) about 36,000 nodes, according
+to <code>1ml.com</code>.
+Investigating the uptime of all of them is not a low-bandwidth task, and
+even if it were, if a substantial number of nodes started running CLBOSS,
+it would be a DDoS on the network just to attempt to connecting to most of
+them.</p>
+<p>Heck, we just recently fixed a bug last year which would cause C-Lightning
+to fail if we had more than ~1000 connections.
+And on some environments the bugfix needs to use a fallback path in some
+low-level code, which consumes CPU in proportion to the number of live
+connections (FWIW the OS-provided fixes are probably also linear in CPU
+time on number of live connections as well, but at least it only needs
+one context switch from userspace to kernelspace, which is pretty
+expensive and not something you want to multiply by N).
+Connecting to 36,000 nodes, even if the network could survive it, your CPU
+load is likely to creak.</p>
+<p>Obviously, the fix here is to <em>not</em> connect to all those nodes
+at once.
+But if we connect to a random sample, we can get good information only for
+that random sample.
+There is a resource vs. accuracy tradeoff.</p>
+<p>It thus helps to be more parsimonious, and to <em>focus</em> the
+attention of our investigator to only a few dozen nodes, selecting those
+that, by other metrics, are also good.</p>
+<p>Thus, channel candidate selection is intended to support channel
+candidate investigation, by focusing investigation (i.e. the costly
+checking of the uptime of nodes) to only a small number, so we can get
+high-quality uptime information about those nodes.</p>
+
+<h1>Channel Finders</h1>
+<p>There are a number of modules which trigger whenever some part of
+CLBOSS thinks we should have more channel candidates:</p>
+<p><ul>
+ <li><code>Boss::Mod::ChannelFinderByPopularity</code> &mdash;
+     searches for large popular nodes and chooses nodes near
+     them.</li>
+ <li><code>Boss::Mod::ChannelFinderByDistance</code> &mdash;
+     searches for distant nodes and proposes them.</li>
+ <li><code>Boss::Mod::ChannelFinderByListpays</code> &mdash;
+     checks through our outgoing payment history and selects
+     nodes we pay to.</li>
+ <li><code>Boss::Mod::ChannelFinderByEarnedFee</code> &mdash;
+     checks our statistics for peers that have been earning us
+     much outgoing fees and chooses their neighbors.</li>
+</ul></p>
+<p>All the above modules trigger on the
+<code>Boss::Msg::SolicitChannelCandidates</code> message.
+They then perform their algorithm, and, with the exception of
+<code>Boss::Mod::ChannelFinderByListpays</code>, broadcast
+<code>Boss::Msg::PreinvestigateChannelCandidates</code>.
+<code>Boss::Mod::ChannelFinderByListpays</code> instead
+generates
+<code>Boss::Msg::ProposePatronlessChannelCandidate</code>,
+which triggers the matchmaker to find a patron for its
+proposal.</p>
+<h2>Digression: Reservoir Sampling</h2>
+<p>A common algorithm that the above channel finder modules use
+is <code>Stats::ReservoirSampler</code>.
+This implements <dfn>reservoir sampling</dfn>, which is a family
+of algorithms that select an item at random from a stream of
+input items.
+Reservoir sampling algorithms are O(1) in size, and O(n) CPU
+load on the number of input items, and are also online
+algorithms.</p>
+<p>The specific reservoir sampling algorithm used is called
+A-Chao.
+A-Chao takes each input item with a weight.
+The higher the weight of an input item, the more likely it is
+to be selected.
+Also, the algorithm can be parameterized so that it will select
+N items at random, not just one item.</p>
+<p>With reservoir sampling, much of the behavior of the
+channel finder modules is randomized.
+This is important since CLBOSS wants to avoid becoming a
+kingmaker.</p>
+<p>Suppose CLBOSS used a purely deterministic, non-random
+algorithm.
+Now suppose many node operators switch to having their nodes
+managed by CLBOSS.
+<code>Boss::Mod::ChannelFinderByPopularity</code> and
+<code>Boss::Mod::ChannelFinderByDistance</code> process as
+input the gossiped network map.
+The gossiped network map tends to be weakly synchronized
+across all nodes.
+Thus, a purely deterministic, non-random channel finder
+algorithm, run on multiple nodes, will tend to select the same
+node to propose for channel making.
+This will dangerously centralize the network around some
+&ldquo;king&rdquo;.</p>
+<p>More importantly, CLBOSS is free and open-source software,
+meaning anyone can take its code and figure out how it
+behaves.
+If it uses some metric, then people who want to centralize
+Lightning around their node will try to game the metric used
+by CLBOSS.
+This is a distinct disadvantage that CLBOSS has compared to
+human node managers, whose brains are not open-source and
+difficult to understand (I have already captured many humans
+and dissected their brains, and I still do not understand how
+they think sometimes).</p>
+<p>Thus, CLBOSS uses randomized behavior, but weighted towards
+high-quality nodes.
+Thus, multiple CLBOSS-using nodes will tend to prefer the
+same nodes, but will not choose exactly one single
+&ldquo;king&rdquo;.</p>
+<p>An effect of this randomness is that very rarely, a
+channel-finder module is going to propose a node that has
+bad stats for the metric the channel-finder node uses.
+This is fine, since it is rare, and prevents CLBOSS from
+being too predictable.</p>
+<h2>By Popularity</h2>
+<p><code>Boss::Mod::ChannelFinderByPopularity</code> finds
+channel candidates according to its sense of <dfn>popularity</dfn>,
+which it defines as the number of distinct nodes it has at least
+one channel with (i.e. number of peers, not number of channels).</p>
+<p>It uses a reservoir sampler, with each entry being a node on
+the gossip map, and the weight being the number of peers that
+node has.
+The reservoir sampler keeps 5 such popular nodes.</p>
+<p>Plot twist: the selected popular node is <em>not</em> the
+<code>proposal</code>, i.e. we do not channel directly with the
+popular node.</p>
+<p>Instead, the popular node is the <em><code>patron</code></em>,
+and one of its peers becomes the <code>proposal</code>.
+For each popular node, we shuffle its direct peers, and use
+each peer-of-popular-node as a <code>proposal</code>, with the
+popular node as the <code>patron</code>.
+We then tell preinvestigation to take one proposal from each
+popular node (i.e. for each selected popular node, we emit a
+<code>Boss::Msg::PreinvestigateChannelCandidates</code> with
+the shuffled list of peers as the <code>proposal</code>s and
+with the same <code>patron</code>, the popular node).
+Thus, preinvestigation effectively selects one of the peers of
+the popular node to be the proposal.</p>
+<p>I believe I got the above idea, to channel with the <em>peers</em>
+of popular nodes instead of popular nodes directly, from Rene
+Pickhardt.
+The purpose is to prevent network centralization.
+If we channel to a popular node (for whatever reasonable metric
+we could use for &ldquo;popular&rdquo;) then we make that node
+even more popular, which makes it more likely for other CLBOSS
+nodes to pick, which makes it even more popular, ad infinitum,
+thus once again becoming a kingmaker.
+However, if we instead channel to their peers, we spread out the
+liquidity of the entire network a little more.
+This slows down centralization.
+At the same time, we are just one hop away from a popular node,
+so our connectivity to the rest of the network is reasonable,
+as long as the direct peer has good uptime (which is measured by
+the investigation parts).</p>
+<p>(I should note however that most popular nodes also have other
+popular nodes as peers, so this will still tend to select popular
+nodes for channeling with.
+At least not-so-popular nodes that are peers of popular nodes get a
+chance, though.)</p>
+<p>On top of this basic algorithm are a number of modifications:</p>
+<p><ul>
+ <li><p>If our own node already has 4 or more channels, the
+        reservoir sampler keeps only 1 popular node, not 5.</p>
+     <p>The intent is that this algorithm is used primarily by
+        new nodes, which need to get good connectivity to the
+        network.
+        Popular nodes have more connectivity (because they are
+        popular), so if our own node is &ldquo;new&rdquo; i.e.
+        has few channels, popular nodes should be prioritized.</p>
+     <p>Conversely, if a node already has a number of channels,
+        presumably those were either done by CLBOSS and already
+        to popular nodes, or they were done manually and we
+        should just go with whatever the human manager did.</p>
+     <p>Further, we reduce the participation of the by-popularity
+        module in order to reduce centralization.
+        This further reduces the kingmaker effect of this module.
+        We do this after we have already established a few channels
+        and have a reasonable liquidity base.</p></li>
+ <li><p>If the node is so new that it has less than 800 nodes in
+        its gossiped network map, we abort processing and try
+        again later.
+        &ldquo;Later&rdquo; here is either the occurence of the
+        10-minute timer, the arrival of a new onchain block, or
+        20 seconds after a new connection to a new peer is
+        established.
+        The hope is by that time, a little more of the network
+        map is available.</p>
+     <p>If the network map is so grossly incomplete, then it is
+        unlikely we would have accurate information on the network
+        topology.
+        So we should try later, when a little more of the network
+        map is available.</p>
+     <p>The exact number probably needs to be tweaked.
+        The mainnet network has grown about 10x since it was set,
+        while the testnet network has shrunk and has less than
+        800 nodes.</p></li>
+</ul></p>
+<p>While the metric used by the by-popularity module <em>is</em>
+gameable, the fact that we propose the <em>peer</em> of the popular
+node mitigates this.
+If a node games this metric, then one of its peers gets the benefit,
+not the node itself.
+Now, the method to game this would be for the node to also launch
+several fake nodes that have channels to it.
+Then it is likely that one of the fake nodes will be selected as
+the proposal.
+However, remember that we also use dowsing to determine how much
+to put in the channel to the node.
+Thus, the channel with the fake node has to be substantial in size,
+or else CLBOSS will allocate only a small amount to it, and if the
+amount is less than the minimum channel size, it will skip that
+node.
+This means that usefully gaming this metric requires nodes to
+sacrifice liquidity in many medium-sized channels to dead-end
+fake nodes.
+It would be more rational to just put the same number of channels
+to actual nodes on the network, as now the liquidity is useable
+for forwarding and can be used to earn fees.
+Thus, it would be sub-optimal to attempt to game the used
+metric.</p>
+<p>However, possibly a better metric would be to not select
+on <em>nodes</em> but rather on channels, and to use the size
+of the channel as the weight.
+When a channel is selected, we determine which of the two
+endpoints is larger (has more total amount in channels) and
+select that as <code>patron</code> and the other as
+<code>proposal</code>.
+This more explicitly helps our goal of spreading out the
+liquidity, and channel size serves as a proxy for popularity,
+and is a direct indicator of how well-connected the nodes are.</p>
+<h2>By Distance</h2>
+<p>While the by-popularity module considers our own connectivity
+to the network, once we are well-connected, it would also be
+nice to give less well-connected nodes some liquidity.
+This is rational since connecting to less-well-connected
+nodes gives the possibility that we have a virtual monopoly on
+payments to such weakly-connected nodes, thus earning more
+fees.</p>
+<p>So, the <code>Boss::Mod::ChannelFinderByDistance</code>
+module proposes nodes by determining our <dfn>distance</dfn> to
+all nodes on the network, and proposing distant nodes.
+The distance of a node is an estimate on how much it would take
+for us to send 10,000sats to that node.</p>
+<p>We implement the Dijkstra pathfinding algorithm in
+<code>Graph::Dijkstra</code>.
+Note that the Dijkstra pathfinding is not actually a
+<em>pathfinding</em> algorithm, more accurately it generates a
+shortest-path tree.
+We simply feed the network graph to the Dijkstra algorithm, and
+once the entire network graph has been provided, we extract the
+shortest-path tree.</p>
+<p>Our own node is the root of the shortest-path tree, and the
+leaves of the tree are the most distant nodes from our position
+in the network.
+The number of leaves will be some fraction of the total number
+of nodes.
+We then use a reservoir sampler on the leaves, with the total
+distance of that leaf (i.e. the total estimated cost to send
+10,000sats to that node) as weight, keeping 40 candidates.
+We then sort the selected candidates from highest-distance
+to lowest-distance, and pass it to the preinvestigator, telling
+it to get at most 3 nodes.</p>
+<p>For each <code>proposal</code>, we get as <code>patron</code>
+the parent node in the shortest-path tree.
+This parent node is how the <code>proposal</code> would connect
+to the rest of the network, so it serves well as the
+<code>patron</code>, which we consider as a proxy for the
+rest of the network.</p>
+<p>If we have no channels yet, then this module does nothing,
+since it has no liquidity to the network anyway and the Dijkstra
+algorithm would terminate immediately.</p>
+<p>If a channel has fees so large that they take more than 50sats
+to transfer a 10,000sat payment, we ignore the channel during
+the Dijkstra run.
+This prevents a trivial gaming of the metric: a well-connected
+node (which would likely have a low distance score for most of
+the network) can start up a single fake node and make a channel
+to it, charging usurious fees for the channel, thus making the
+fake node apparently high-distance from anywhere on the network
+(due to the single hop it has having a high fee), and possibly
+affecting CLBOSS-managed nodes into selecting that node, which
+is really just controlled by the well-connected node.
+Unlike the case of the by-popularity module, whose metric is
+gameable only at high cost to the gamer, this is relaitvely
+low-cost &mdash; only a single channel needs to be made &mdash;
+so we make specific precautions against this gaming.</p>
+<p>Distant, badly-connected nodes tend to be low-uptime (i.e.
+people, and CLBOSS if you enable it, tend to close their
+channels with them due to their low uptime).
+Thus, preinvestigation is an important part of filtering the
+results.
+Maybe the distant badly-connected node is just poorly
+managed, or very new, but is otherwise high-uptime, so we at
+least try to give them a chance by doing a quick
+preinvestigation check for uptime.
+While the balance of probability is that such distant nodes
+are likely to be low-uptime, we might luck into a good one
+that just happens to need more liquidity.</p>
+<h2>By Listpays</h2>
+<p>C-Lightning includes a <code>listpays</code> command which
+lists out the payments that the node has made.</p>
+<p>On the logic that, if you paid to a node in the past, you
+are likely to pay to the node again, it would be rational to
+make direct channels to the payee.
+The <code>Boss::Mod::ChannelFinderByListpays</code> uses that
+logic for its selection policy.</p>
+<p>We simply look at the results of <code>listpays</code>
+C-Lightning command, and count the number of times we paid
+to each payee.
+We use a reservoir sampler, giving each payee, and use the
+number of times it was paid as the weight.
+The reservoir sampler keeps 2 payees.</p>
+<p>Unlike other channel finders, by-<code>listpays</code>
+uses <code>Boss::Msg::ProposePatronlessChannelCandidate</code>.
+This is because the <code>listpays</code> command only
+really provides the destination, but not a lot more information.
+Thus, this module is unable to specify a <code>patron</code>.</p>
+<p>We use the number of times paid, instead of just the total
+sum paid, because I think the effect of <code>base_fee</code>
+would dominate on the fees.
+Thus, the number of times paid should have a larger effect.</p>
+<p>Unfortunately, this module does not really handle
+unpublished payees well, unpublished channels delenda est.
+In particular, patron matchmaking only works if the proposal
+is public, and we can really only channel to a node if we can
+<em>connect</em> to it first, and if the node is unpublished,
+we do not know how to contact it.
+While <code>listpays</code> easily exposes the payee node,
+it does not easily expose the LSP the payee uses.
+However, <code>listpays</code> <em>does</em> expose the
+<code>bolt11</code> and <code>bolt12</code> strings, so
+CLBOSS can implement a parser for such.
+For an unpublished payee, it would have to provide a channel
+hint in the <code>bolt11</code> or <code>bolt12</code>, so
+we can check if the payee is available on the published
+network map, and if not, look at the channel hints in
+<code>bolt11</code>/<code>bolt12</code> and propose a node
+there if it is in the published network map.</p>
+<h2>By Earned Fee</h2>
+<p>A limitation of CLBOSS is that, since it is not a fully
+sentient thinking process <em>yet</em>, it is unable to
+gather news from Bitcoin news sites in order to determine
+where best to make channels to.
+For example, there may be a popular new product or service
+or site or whatever that just announced that they would add
+support for Lightning Network payments.
+Then it would be a good idea to create channels to the
+LN node of that site/whatever, in the hope that the massive
+influx of buyers of this newly-hyped widget would mean many
+forwards to the node.</p>
+<p>However, a LN node <em>can</em> get some relevant data,
+and that data is how many and how much payments have been
+forwarded out to a particular direct peer of ours.
+If one of our peers has had a recent spike in the fees
+we actually earn when forwarding to that peer, that implies
+that there is significant interest in payments to that
+peer (or at least nodes near that peer), so adding more
+capacity in its general direction could be justified based
+on this data.</p>
+<p>Now, C-Lightning, as of this writing (mid 2022), strictly
+limits to one peer, one channel.
+This means that we cannot just throw more liquidity at
+the high-earning peer by making a new channel with them.
+C-Lightning has this policy as we would like to encourage
+people to keep the number of UTXOs down, and an extra
+channel with the same peer is an extra UTXO, you could
+have just used a larger channel to that peer in the first
+place.
+(Also it would be difficult with the one-peer-one-daemon
+architecture C-Lightning has, LOL.)</p>
+<p>So what we do instead is to make new channels to
+<em>peers</em> of such a high-earning peer.</p>
+<p>The by-earned-fee module finds the highest-earning peer,
+and uses it as the <code>patron</code>.
+We then take all the peers of that high-earning peer,
+shuffle them, and list them as <code>proposal</code>s,
+with the high-earning peer as the common
+<code>patron</code>.
+We then send this out to the preinvestigator.</p>
+<p>CLBOSS has a module that keeps various statistics for
+each of our direct peers.
+It keeps statistics for the last 3 months.
+One of those statistics is the amount of millisatoshis
+we earned from forwards <em>out</em> to the peer.
+It is this outgoing fee that is used by the by-earned-fee
+channel finder.
+However, the by-earned-fee channel finder restricts its
+data to the earnings from the past three days.
+This allows it to adapt to changing market conditions,
+where some node may receive high volume of payments
+temporarily due to e.g. a sale or other limited-time
+event, or the converse where some product becomes
+unfashionable or undesirable and another product now
+gets more payments over the LN.</p>
+
+<h1>Analysis</h1>
+<p>Unfortunately, there is little analysis on each of
+the channel finder modules.
+While the basis for including them are logical to me,
+it would be better if we could get more information
+from real-world performance.</p>
+<p>For instance, it would probably be better if each
+proposal included the name of the channel-finder
+that proposed them.
+This information would have to be propagated all the
+way through investigation and retained even beyond
+channel creation.
+Then we would monitor the earned fees we get,
+as well as the channel sizes, and determine how
+much we earned for each channel finder, in proportion
+to the channel sizes that they ended up triggering.</p>
+<p>However, simply from the above description, we can
+observe that, for a completely new node, only the
+<code>Boss::Mod::ChannelFinderByPopularity</code>
+will trigger.
+<code>Boss::Mod::ChannelFinderByDistance</code> will
+not trigger since the own node is the root in the
+Dijkstra search, and if your own node is new, it does
+not have any channels and no way to progress the
+Dijkstra shortest-path-tree algorithm.
+<code>Boss::Mod::ChannelFinderByListpays</code> and
+<code>Boss::Mod::ChannelFinderByEarnedFee</code>
+will work only if the node has done any sort of
+economic activity (outgoing payments or successful
+forwardings, respectively).</p>
+<p>Thus, for a new node, only the by-popularity
+module triggers, and it is a lore in Lightning
+Network development that <em>some</em> measure of
+popularity would work for the initial channels of a
+new node.
+So that part at least seems reasonably safe.</p>
+<p>Other channel finder modules are of uncertain
+utility.
+Indeed popularity seems dubious beyond the first
+few channels, since it would even more strongly
+centralize the network, which is why it backs
+off and reduces its participation once the node
+has more than a few channels.</p>
+<p>I have been harping on and on about having
+CLBOSS avoid becoming a kingmaker, but notice that
+the by-distance channel finder has a goal of
+reducing the distance to other nodes, which is
+also a measure of how central your node is to
+the network.
+You would be at the exact center of the network
+if, for all nodes on the network, we find the
+largest distance they have to any node, and your
+node had the lowest such largest distance among
+all nodes.
+Thus, the by-distance module is indeed a kingmaker,
+promoting our own node as the king.</p>
+<blockquote>
+<img src='04-selection-centrali.svg' />
+<p>In the above, <code>A</code> is central because
+if we took the Dijkstra shortest-path-tree with
+<code>A</code> as the root, all the leaves would
+have a maximum distance of one hop.
+If we took <code>B</code> as the root in a
+Dijkstra shortest-path-tree, then we would find
+that the leaves would be <code>C</code> and
+<code>D</code>, and its distance to them would be
+two hops.
+Since <code>A</code> has a shorter maximum
+distance (1) than <Code>B</code> (2), it is more
+central than <code>B</code>.</p>
+</blockquote>
+<p>However, this kingmaker avoidance is really
+that we want to avoid making some
+<em><strong>other</strong></em> node the king,
+and having multiple CLBOSS instances decide to
+serve the same king.
+Striving to make <em>our own</em> node the king
+is perfectly fine, since each CLBOSS instance
+will have a different
+&ldquo;<em>our own</em>&rdquo; node:
+each CLBOSS has its own king, i.e. our own node
+under management.
+Thus, each CLBOSS instance would be pulling and
+competeing against each other, instead of pulling
+together to make some single node the king.
+Free market and all that.
+Capitalism, ho!</p>
+
+</div>
+
+<div class=footer>
+<p>&copy; 2022 ZmnSCPxj.  Released under CC-BY.</p>
+<iframe src='../donation.html' frameborder=0 width='100%' />
+</div>
+
+</body>
+</html>
