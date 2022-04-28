@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang=en>
+<head>
+<meta charset=utf-8>
+<title>Creating Channels To Candidates (Autopilot Part 3); CLBOSS</title>
+</head>
+<body>
+
+<div class=header>
+<p><a href='../index.html'>ZmnSCPxj</a> &raquo; <a href='index.html'>CLBOSS</a> &raquo; Creating Channel To Candidates (Autopilot Part 3)</p>
+</div>
+
+<div class=content>
+<p>Updated: 2022-04-28</p>
+
+<h1>Introduction</h1>
+<p>This writeup is of interest to Lightning Network developers who want
+to make their own &ldquo;autopilot&rdquo;, as well as existing node operators
+who take on the role of node manager as well (a role which CLBOSS seeks
+to take over via automation).</p>
+<p>Selecting channel candidates and investigating their uptime is all well
+and good, but at some point we need to make channels to get our sweet, sweet
+liquidity into the Lightning Network.</p>
+<p>We divide channel creation into two parts:</p>
+<p><ol>
+ <li><code>Boss::Mod::ChannelCreationDecider</code> &mdash; algorithm
+     to determine when to create channels.</li>
+ <li><code>Boss::Mod::ChannelCreator</code> &mdash; algorithm to get channel
+     candidates, figure out how to distribute our funds, and actually
+     build channels.</li>
+</ol></p>
+
+<h1>Deciding To Create Channels</h1>
+<p>The decision to create, or not create, channels right now is a mix of a
+number of inputs.
+The <code>Boss::Mod::ChannelCreationDecider</code> not only decides whether
+to create a channel then and there, it also decides <em>how much</em> to put
+into channels.</p>
+<p>Thus, <code>Boss::Mod::ChannelCreationDecider</code> cannot be described
+in isolation; we need to discuss a few other modules that feed data into
+the decider module, as well as some sticky points that affect its
+design.</p>
+<h2>Minimum Funds To Leave Onchain</h2>
+<p>The general assumption of <code>Boss::Mod::ChannelCreationDecider</code>
+is that if the node operator has bothered to give the node any amount of
+onchain funds at all, as much of it as possible should be in channels.
+After all, you can already use a wide variety of software to HODL funds
+onchain, so if you are tossing funds at a CLBOSS, it seems reasonable to
+assume you want it offchain.</p>
+<p>Against this, we should consider recent and upcoming updates to the
+Lightning Network protocol.</p>
+<p>While the initial BOLT 1.0 spec provisions that channel closing fees
+(both unilateral and mutual closes) are deducted from the channel itself,
+recent proposals &mdash; anchor commmitments and Decker-Russell-Osuntokun
+&mdash; would require that channel close fees be paid for using onchain
+funds <em>outside</em> the channel, rather than in-channel funds.
+This means that we should really prepare for these updates by keeping a
+small amount of onchain funds around.</p>
+<p>The amount we leave onchain should not be relative to the amount of
+funds we own, since it would be used for paying onchain fees, and onchain
+fees are notoriously independent of the amount being transferred.
+There is a mild argument that it should be relative to the number of
+channels we have, but in the expected case, only one channel at a time
+is closed (and once the close is confirmed we now have more funds we
+can use for other channels), so we only need to reserve onchain funds
+sufficient to pay for one channel being closed at the maximum expected
+feerate.</p>
+<p>The default amount we reserve is 0.3mBTC, or 30,000sats.
+This can be changed with the <code>--clboss-min-onchain</code>
+option.</p>
+<h2>Announcing Onchain Funds</h2>
+<p>The <code>Boss::Mod::OnchainFundsAnnouncer</code> module monitors
+the amount of onchain funds we have.
+At each block, we ask the C-Lightning node how much funds can be spent.
+We restrict this to funds that have been confirmed for 3 or more blocks.
+The module then announces <code>Boss::Msg::OnchainFunds</code> message,
+with the total amount available; C-Lightning automatically deducts the
+cost of transaction inputs needed to spend all the funds (protip: we
+use the <code>fundpsbt</code> C-Lightning command so that C-Lightning
+does this computation for us).</p>
+<h2>Everybody Say &ldquo;Fees!&rdquo;</h2>
+<p>Onchain fees are necessary for all onchain actions.</p>
+<p>Creating a channel is an onchain action.</p>
+<p>Thus, our decision to create channels right now, or not to create,
+depends on the current onchain feerates.</p>
+<p>The <code>Boss::Mod::OnchainFeeMonitor</code> monitors onchain
+feerates continuously (more specifically, every 10-minute timer
+message), and emits <code>Boss::Msg::OnchainFee</code> messages.
+The <code>Boss::Msg::OnchainFee</code> has an important flag,
+<code>fees_low</code>, which is <code>true</code> if the monitor
+thinks fees are low, and <code>false</code> if the monitor
+thinks fees are high.
+Most other parts of CLBOSS base their decisions on this
+<code>fees_low</code> flag announced in
+<code>Boss::Msg::OnchainFee</code>.</p>
+<p>How does <code>Boss::Mod::OnchainFeeMonitor</code> decide whether
+some particular feerate is &ldquo;low&rdquo; or &ldquo;high&rdquo;?
+The monitor keeps the raw feerates from the past two weeks; this
+data is stored in the common on-disk database.
+If the CLBOSS is completely new and has no data, then the data is
+initialized on-disk with some hardcoded samples I got in late 2020.</p>
+<p>From the data (sampled every 10-minute timer message) we sort the
+data, and use the 20th percentile as the boundary between
+&ldquo;low&rdquo; and &ldquo;high&rdquo; fees.
+If the current fees are above the 20th percentile, we judge feerates
+as being low, but if the fees are below or equal to the 20th
+percentile, we judge them as high.
+Note in particular the &ldquo;below or equal&rdquo;; fees have
+generally been consistently low in 2021, and often most of the data
+is at the minimum feerate of 253sats/kweight.
+This means that the 20th percentile, most of the time, is also
+253sats/kweight, so we judge &ldquo;below or equal&rdquo; as being
+&ldquo;low&rdquo;.</p>
+<p>Another concern is that fees might fluctuate around the border,
+leading us to flip-flop between &ldquo;low&rdquo; or
+&ldquo;high&rdquo;.
+So if this is not the first time we are doing this judgment, we
+do some hysteresis.
+If this is the first time we are doing this judgment (i.e. we
+have not judged &ldquo;low&rdquo; or &ldquo;high&rdquo; yet)
+since CLBOSS started, then we use the 20th percentile.
+If not, then we already have a previous judgment.
+If the previous judgment was &ldquo;low&rdquo;, we check if we
+are larger than the 23rd percentile to switch to
+&ldquo;high&rdquo;.
+If the previous judgment was &ldquo;high&rdquo;, we check if
+we are below or equal to the 17th percentile to switch to
+&ldquo;low&rdquo;.</p>
+<h2>The Decision</h2>
+<p>First, <code>Boss::Mod::ChannelCreationDecider</code> checks
+if the onchain funds is equal or less than the amount we will
+keep onchain as set by the <code>clboss-min-onchain</code>
+setting.
+If the onchain funds is less than or equal to that, it does
+nothing, not even printing to the logs.</p>
+<p>If we get past that check, we then compute our
+&ldquo;target&rdquo;, an amount that we should have onchain
+before we trigger.
+This is either twice our minimum channel size (min channel is
+5mBTC as of mid 2022, so the trigger is 10mBTC), or 10% of all
+our total funds (both offchain and onchain), whichever is higher.
+If the resulting &ldquo;target&rdquo; exceeds 167.77215 mBTC
+(as of mid 2022), however, we set the target to 167.77215 mBTC.</p>
+<p>If the onchain funds is less than the target plus the
+min-onchain reserve, then we definitely will not create channels.
+However, if the onchain funds is within 10mBTC of the target plus
+min-onchain reserve plus an extra 30,000sats, then we will
+trigger the <code>Boss::Msg::NeedsOnchainFunds</code> message,
+which will cause us to swap offchain funds to onchain funds.
+This handles the case where a channel gets closed, with the
+amount on our side not sufficient to achieve the target.
+Our hope is that later, if the onchain-to-offchain swap
+succeeds, we can now actually get the onchain funds back offchain.<p>
+<p>If the onchain funds exceeds the target plus the reserve
+min-onchain, then we check if fees are currently low.
+If fees are currently low, then we send the onchain funds,
+minus the reserve min-onchain, to the channel creator, raising
+the <code>Boss::Msg::RequestChannelCreation</code> message.</p>
+<p>If fees are high, we check how much of our funds are onchain
+vs. offchain.
+If at least 25% of our total funds is onchain, we still send it
+out for making channels (minus reserve min-onchain), even if
+fees are high.
+Otherwise, we just HODL on to the onchain funds and wait for a
+low-feerate time.</p>
+<p>Node operators might be tempted to tweak all those numbers
+or behaviors.
+But putting knobs and options just increases the complexity of
+CLBOSS, for what I think would be minimal benefit.
+Most node operators will just leave it well enough alone, on
+the assumption that default settings are fine.</p>
+
+<h1>Creating Channels</h1>
+<p>Once <code>Boss::Mod::ChannelCreationDecider</code> decides
+to create channels, and broadcasts
+<code>Boss::Msg::RequestChannelCreation</code> with the amount
+to put into channels, the <code>Boss::Mod::ChannelCreator</code>
+module steps in.</p>
+<p>What the channel creator does is get candidates from the
+investigator.
+The investigator will give all candidates with non-negative
+<code>onlineness</code> score, or all candidates if all
+candidates have negative <Code>onlineness</code>.</p>
+<p>The investigator gives the candidates in a specific order:
+higher-scored candidates first, and in case of a tie in
+<code>onlineness</code>, with the earlier-proposed candidate
+first.</p>
+<p>But before processing that list of candidates, the
+channel creator first rearranges that list via a few
+policies.</p>
+<p>Then, it takes the rearranged list, and the amount to be
+put into channels, and creates a plan.
+A plan is simply an association table between node and
+an amount, the amount to put into the new channel to that
+node.</p>
+<p>Finally, we create the channels, using the C-Lightning
+<code>multifundchannel</code> command, enabling the option
+to keep retrying even if one of the nodes fails to build a
+channel.</p>
+<p>If a candidate is used in the plan, whether or not
+building the actual channel succeeds, the investigator
+removes the candidates from its candidate-to-investigate
+list.</p>
+<h2>Candidate Rearrangement Policies</h2>
+<p>The reason why the ordering of the channel candidates
+matters is that the planning stage takes the channel
+candidates in order.
+That is, if there is not enough funds to make channels to
+all candidates, we only take the earlier-listed channel
+candidates.</p>
+<p>While ordering strictly by <code>onlineness</code> score
+is very reasonable, recall that <code>onlineness</code>
+saturates at a maximum of 24, and once the CLBOSS has been
+running for a while, nearly every surviving candidate will
+have that <code>onlineness</code> score of 24.
+Thus, we should probably also consider prioritizing the
+candidates.</p>
+<p>As of this writing (mid 2022) there are two policies for
+rearranging the channel candidates.</p>
+<p><ul>
+ <li>We mildly rearrange according to the results of dowsing.
+     As you may recall, dowsing is a process where we
+     estimate the liquidity between the proposal and its
+     patron, with the patron effectively being a proxy for
+     &ldquo;the rest of the Lightning Network&rdquo;.
+     Nodes with high dowsing results with their patrons get
+     bumped up in the order slightly.</li>
+ <li>If a proposal has a similar IP address to an existing
+     peer, or an earlier proposal in the list, we move that
+     proposal to the end of the list.</li>
+</ul></p>
+<p>More specifically, first we group the proposals by 3.
+We then sort each group of 3 according to their dowsing
+score.
+This means that a proposal with high dowsing score (i.e.
+good liquidity with its patron) can go up by two ranks
+in priority.</p>
+<p>Then, we get the address of each proposal.
+This is more involved, since addresses can be of three
+types:</p>
+<p><ul>
+ <li>IPv4</li>
+ <li>IPv6</li>
+ <li>Torv3</li>
+</ul></p>
+<p>We classify addresses into bins.
+A bin is simply a number.
+For IPv4 addresses, it is the first two bytes.
+For IPv6 addresses, it is the first three bytes.
+For Torv3 addresses, we hash the onion addressi (using
+the CLBOSS private key as a hash tweak) then take the
+lowest 2 <em>bits</em> of the hash.</p>
+<p>Nodes with the same address bin as an existing
+peer, or with earlier candidates, are moved to the end
+of the list of candidates.
+Binning means we try to avoid having too many channels
+to nodes in the same geographic area, since the high
+bytes of IPv4 and IPv6 tend to map to contiguous or
+nearby geographic areas.
+THe intent is to increase the effort that would be
+required in order to mount an eclipse attack on our
+node: since we try to distribute our channels so
+that they are distant geographically (we hope!) an
+eclipse attacker has to make an effort as well to
+set up nodes in various locations.</p>
+<p>Of course, Torv3 .onion addresses do not have any
+correlation between the .onion address and their
+geographic location, which is the whole point of Torv3
+.onion addresses.
+But we would like to still bin them, to reduce
+anons using this to easily set up a few hundred nodes
+in a single datacenter to attempt to redirect LN
+traffic to their nodes.
+At the same time, we do not want to just bin
+<em>all</em> Tor nodes into a single bin, because if
+we do, we will tend to only have a single Torv3 peer.</p>
+<p>What we do is to hash the Torv3 address with the
+CLBOSS private key as a hash tweak, to ensure that
+different CLBOSS instances will have different
+results for the same Torv3 address, and take the
+low 2 bits of the resulting hash.
+This means that an attacker cannot simply set up
+four Torv3 nodes whose hashes have different
+values in the low 2 bits; the hashes of the same
+Torv3 node would be different depending on which
+CLBOSS instance is doing the hashing.
+Letting 2 bits allows us to have 4 Torv3 peers
+before we start prioritizing clearnet peers.</p>
+<h2>Planning</h2>
+<p>Once we have the list of candidates rearranged to
+our liking, we now plan how to build channels for
+each peer.</p>
+<p>At its most basic, we just take each candidate
+in order and assign either the remaining unassigned
+funds, or the dowsing result of that proposal with
+its patron, or the maximum channel size, whichever is
+lower.
+If dowsing result is less than minimum channel size,
+we skip that candidate (and signal the investigator
+to remove it from the list of investigated nodes, as
+well).</p>
+<p>However:</p>
+<p><ul>
+ <li>If we have only 0 or 1 channels right now, we
+     only give up to half the funds to the very first
+     candidate in the list, so that some of the funds
+     goes to at least one other candidate (i.e. we
+     plan for at least two channels).</li>
+ <li>If we have a remainder that is too small for a
+     channel (i.e. below the minimum channel size),
+     or we ran out of candidates, and we were able to
+     plan for at least one channel, we try to divide
+     the remainder equally among all planned channels.
+     If adding this remainder to all the planned
+     channels does not result in any planned channel
+     exceeding the maximum channel size, then we indeed
+     divide the remainder to the already-planned
+     channels.</li>
+ <li>If the above does not pass due to one of the
+     planned channels exceeding the maximum channel
+     size, we instead try to deduct from the largest
+     planned channel so that the remainder
+     <em>is</em> above the minimum channel size
+     (if there is still a candidate we have not
+     planned for yet) or above the minimum size we
+     can leave onchain without re-triggering the
+     channel creation (if there are no more
+     candidates).
+     If the former case is OK, we then plan for the
+     next candidate in the candidate list.</li>
+</ul></p>
+<h2>Creation</h2>
+<p>Once we have a plan, we just call into the
+<code>multifundchannel</code> of C-Lightning in order
+to create the channels.
+This is helpful since we use only a single transaction
+to fund multiple channels.</p>
+<p><code>multifundchannel</code> has an option to
+retry opening if one of the peers refuses (or otherwise
+fails during channel opening) to accept our channel
+opening, removing the failing node(s) and trying the
+remaining nodes; CLBOSS uses this option, since even if
+one prospect peer refuses or fails, the other prospect
+peers are still &ldquo;good&rdquo;.</p>
+
+<h1>How About Dual-Funding?</h1>
+<p>Currently, CLBOSS has no support for the experimental
+dual-funding support in recent C-Lightning.</p>
+<p>It would be nice if we could get
+&ldquo;opportunistic&rdquo; dual-funding.</p>
+<p>When a channel gets closed, we often end up with a
+small amount of funds onchain that is too small for a new
+channel.
+While we do have <code>Boss::Mod::NeedsOnchainFunds</code>,
+sometimes the funds onchain is so small that it is not
+worthwhile to push offchain funds to onchain in order to
+make a minimum-size channel.</p>
+<p>In that case, we would certainly like to welcome any
+new incoming channel and offer to put the small amount of
+funds we have to a new channel they want to make with us.</p>
+<p>However, the current dual-funding flow has the
+channel initiator request a specific amount from the
+channel acceptor, and if the acceptor is unable to provide
+that liquidity, channel opening instead fails.</p>
+<p>The point-of-view of CLBOSS is that an open channel is
+better than the nonexistence of a channel, so it would
+actually prefer to <em>not</em> advertise dual-funding.
+If CLBOSS advertised dual-funding, the initiator might
+ask for more than the small amount of funds we have onchain
+(funds that are below the minimum channel size, which is
+fairly small).
+But us as the acceptor would be unable to fulfill the
+request, and the channel opening will fail.</p>
+<p>Secondarily, suppose we take the viewpoint of the
+channel initiator.
+How much liquidity should CLBOSS ask from a random node?
+Liquidity ads specify rates, but not any maximum limit on
+how much the node can provide as liquidity.
+If we overestimate how much the random node has in
+onchain funds, then channel creation fails since the
+acceptor has insufficient funds for the requested
+liquidity!
+It would be nice if we could tell C-Lightning &ldquo;if
+they do not have sufficient liquidity, ask for less&rdquo;.
+This could also be implemented on the CLBOSS side, but at
+much higher complexity in CLBOSS channel creation (i.e.
+we can no longer simply <code>multifundchannel</code>, we
+would have to use a loop around that command).</p>
+<h2>The Unbearable Effectiveness Of Offchain-to-onchain Swaps</h2>
+<p>People are underestimating the offchain-to-onchain swap,
+which leads to people paying more attention to other, flashier
+techniques.</p>
+<p>Suppose we start with an LN node (&ldquo;you&rdquo;) that is
+channeled to some random node on the network.
+Then, in order to get inbound liquidity, you use an
+offchain-to-onchain swap service.</p>
+<p>In paying to the swap service, you convert outgoing liquidity
+towards the swap service, into inbound liquidity <em>from</em>
+the swap service.
+If you are distant from the swap service, or use a convoluted
+route, then you now have <em>effective</em> inbound liquidity,
+not just from your direct channel counterparty, but from
+<em>all</em> intermediate nodes!
+Thus, you are able to receive from more than just your
+direct peer: the act of using the offchain-to-onchain swap
+service <em>ensures</em> you have inbound liquidity from
+your direct peer, from intermediate nodes, all the way to the
+swap service!</p>
+<blockquote>
+ <img src='05-creation-swap-is-awesome.svg' />
+ <p>i) First you channel to some random node <code>A</code>
+    on the network, which happens to have good liquidity
+    towards the <code>Swap</code> service.
+    ii) Then you buy inbound liquidity, which gets you
+    liquidity not only from <code>A</code>, but also
+    intermediate nodes all the way to <code>Swap</code>,
+    getting you <em>assured</em> remote access to the inboud
+    liquidity of all those nodes, something you cannot get
+    from an LSP.</p>
+</blockquote>
+<p>Yes, in the long run, you cannot assure that the other
+inbound liquidity from the other nodes is not later used by
+other payments and erode your effective inbound liquidity.
+But the same objection applies to LSPs: you cannot assure
+that the inbound liquidity of the LSP (if it even has any
+left) is not later used by other clients of the LSP, either.
+At least in the short run, the offchain-to-onchain swap is
+superior, and decays to the LSP case in the long run.
+And dual-funding, as currently (mid 2022) designed,
+supports the LSP use-case.</p>
+<p>Now recall in previous writeups that one of the
+channel finders is
+<code>Boss::Mod::ChannelFinderByListpays</code>.
+Since the swap service is <em>paid to</em>, it is one of
+the candidates that the by-listpays module is likely to
+propose.
+Now consider what happens: you have liquidity from the
+swap, to a number of intermediate nodes, to your peer,
+to you.
+Then by-listpays proposes a channel from you to the
+swap.</p>
+<blockquote>
+ <img src='05-creation-swap-is-cyclic-superhub.svg' />
+</blockquote>
+<p>You just created a cyclic superhub, also known as
+&ldquo;ring of fire&rdquo; or &ldquo;triangle&rdquo;.
+This has all the known benefits of the cyclic superhub,
+i.e. all the members in the superhub get the effective
+inbound and outbound liquidity of all the other
+members, via some route around the hub.</p>
+<p>In particular, CLBOSS was, all by itself, able to
+arrange the cyclic superhub <em>without</em> having to
+rely on some centralized coordinator (which might later
+be corrupted into censoring particular nodes, as all
+centralized points-of-failure inevitably fall to).
+And CLBOSS is decentralized because even if
+in the future, ZmnSCPxj goes haywire and tries to take
+over the world, you can always say &ldquo;Fork
+CLBOSS!&rdquo; and ensure it supports <em>your</em>
+goals, not mine.</p>
+<p>Compare this to the dual-funding case.
+In dual-funding, we contact some random node, whose
+exact inbound liquidity we know nothing about, and
+which might have oversold its liquidity to many other
+clients.
+In dual-funding (or for that matter, Lightning Pool),
+you are supposed to prepay for the privelege of getting
+inbound liquidity from that node, even though you have
+no idea on the quality of the node (its ability to
+forward, its general liquidity, and the uptime and
+liquidity of <em>its</em> peers).</p>
+<p>With an offchain-to-onchain swap, you do get an
+important bit of information: either you were able to
+pay the swap service via your peer (and thus acquired
+inbound liquidity), or not.
+If you were able to pay, then the peer and all the
+intermediate nodes up to the swap service had uptime
+at least good enough that the payment succeeded.
+This is not a lot of information (and the nodes
+might have been online simultaneously by sheer luck,
+which in the future may no longer be true), but it
+<em>is</em> significantly more than the information
+you get in the dual-funding (and Lightning Pool) case
+<em><strong>before</strong></em> you have to go pay
+for the (hopefully high-quality) inbound liquidity.
+Offchain-to-onchain swaps are Boring, But
+Practical!</p>
+
+</div>
+
+<div class=footer>
+<p>&copy; 2022 ZmnSCPxj.  Released under CC-BY.</p>
+<iframe src='../donation.html' frameborder=0 width='100%' />
+</div>
+
+</body>
+</html>
