@@ -11,7 +11,7 @@
 </div>
 
 <div class=content>
-<p>Updated: 2022-04-28</p>
+<p>Updated: 2023-12-11</p>
 
 <h1>Introduction</h1>
 <p>This writeup is of interest to Lightning Network developers who want
@@ -344,10 +344,12 @@ one prospect peer refuses or fails, the other prospect
 peers are still &ldquo;good&rdquo;.</p>
 
 <h1>How About Dual-Funding?</h1>
-<p>Currently, CLBOSS has no support for the experimental
-dual-funding support in recent C-Lightning.</p>
+<p>Currently, CLBOSS has no explicit support for
+dual-funding.</p>
 <p>It would be nice if we could get
-&ldquo;opportunistic&rdquo; dual-funding.</p>
+&ldquo;opportunistic&rdquo; dual-funding, where CLBOSS
+is able to put funds into a channel that a new peer
+opens to us.</p>
 <p>When a channel gets closed, we often end up with a
 small amount of funds onchain that is too small for a new
 channel.
@@ -358,34 +360,50 @@ make a minimum-size channel.</p>
 <p>In that case, we would certainly like to welcome any
 new incoming channel and offer to put the small amount of
 funds we have to a new channel they want to make with us.</p>
-<p>However, the current dual-funding flow has the
-channel initiator request a specific amount from the
-channel acceptor, and if the acceptor is unable to provide
-that liquidity, channel opening instead fails.</p>
-<p>The point-of-view of CLBOSS is that an open channel is
-better than the nonexistence of a channel, so it would
-actually prefer to <em>not</em> advertise dual-funding.
-If CLBOSS advertised dual-funding, the initiator might
-ask for more than the small amount of funds we have onchain
-(funds that are below the minimum channel size, which is
-fairly small).
-But us as the acceptor would be unable to fulfill the
-request, and the channel opening will fail.</p>
-<p>Secondarily, suppose we take the viewpoint of the
-channel initiator.
-How much liquidity should CLBOSS ask from a random node?
-Liquidity ads specify rates, but not any maximum limit on
-how much the node can provide as liquidity.
-If we overestimate how much the random node has in
-onchain funds, then channel creation fails since the
-acceptor has insufficient funds for the requested
-liquidity!
-It would be nice if we could tell C-Lightning &ldquo;if
-they do not have sufficient liquidity, ask for less&rdquo;.
-This could also be implemented on the CLBOSS side, but at
-much higher complexity in CLBOSS channel creation (i.e.
-we can no longer simply <code>multifundchannel</code>, we
-would have to use a loop around that command).</p>
+<p>However, as of this writing, this is not implemented yet.</p>
+<p>A fair amount of this is that CLBOSS attempts to keep
+funds in channels as much as possible.
+This is why <code>Boss::Mod::NeedsOnchainFunds</code> exists;
+it tries to put onchain funds above the minimum channel size
+so that any onchain funds can be &ldquo;vacuumed up&rdquo;
+into a new channel.
+In particular, because of the swap operation, the swap will
+buy more inbound liquidity Right Now&trade; and then get a
+new channel to a counterparty that CLBOSS selected.</p>
+<p>CLBOSS <em>could</em> wait around for a new counterparty
+that requests to open using openv2.
+This requires that:</p>
+<ul>
+ <li><p>There are enough peers that use openv2 instead of openv1.
+ If there are too few openv2-using peers, waiting for incoming
+ funds is pointless as the probability that an openv2-using peer
+ opens a channel to us where we can opportunistically dual-fund
+ is too low to bother writing code for.</p></li>
+ <li><p>CLBOSS can <em>quickly</em> evaluate how good some random
+ new peer opening a channel to us is.
+ Recall that channel candidate selection takes time, because
+ we want to consider the uptime of potential new peers; a random
+ new peer suddenly showing up and opening a channel to us might
+ not have good uptime.</p>
+ <ul>
+  <li><p>Against this, if the amount is &ldquo;small enough&rdquo;,
+  this evaluation may not be such a big deal.</p></li>
+  <li><p>The issue is that if CLBOSS implements this, somebody who
+  knows that you are using CLBOSS could wait for one of your channels
+  to close (if your channels are public, they can just look at gossip
+  data and see the public blockchain data) and then open a channel
+  to your node, and then go offline forever, possibly locking any
+  funds CLBOSS had onchain and then opportunistically dual-funded
+  when they opened a channel to us, forcing CLBOSS to eventually
+  close it later when it realizes the uptime of the counterparty is
+  too low.</p></li>
+  <li><p>Heuristics may be developed that can figure out if the above
+  risk is relevant for a particular onchain amount, but they are not
+  developed for CLBOSS yet as of this writing.
+  Basically: I invite people to figure this out and contribute code
+  to CLBOSS for this.</p></li>
+ </ul></li>
+</ul>
 <h2>The Unbearable Effectiveness Of Offchain-to-onchain Swaps</h2>
 <p>People are underestimating the offchain-to-onchain swap,
 which leads to people paying more attention to other, flashier
