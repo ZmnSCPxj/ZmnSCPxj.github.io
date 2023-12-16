@@ -11,7 +11,7 @@
 </div>
 
 <div class=content>
-<p>Updated: 2023-12-11</p>
+<p>Updated: 2023-12-16</p>
 
 <h1>Introduction</h1>
 <p>This writeup is of interest to Lightning Network developers who want
@@ -360,7 +360,10 @@ make a minimum-size channel.</p>
 <p>In that case, we would certainly like to welcome any
 new incoming channel and offer to put the small amount of
 funds we have to a new channel they want to make with us.</p>
-<p>However, as of this writing, this is not implemented yet.</p>
+<p>However, as of this writing, this is not implemented on
+CLBOSS yet.
+(In principle this can be developed, it just is not
+implemented in CLBOSS)</p>
 <p>A fair amount of this is that CLBOSS attempts to keep
 funds in channels as much as possible.
 This is why <code>Boss::Mod::NeedsOnchainFunds</code> exists;
